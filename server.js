@@ -15,7 +15,7 @@ const app = express();
 // CORS configuration
 const corsOptions = {
   origin: [
-    "http://admin.adventuresafarinetwork.com", // Previous deployment URL
+    "https://admin.adventuresafarinetwork.com", // Previous deployment URL
     "https://adventure-safari-admin-frontend-k5u.vercel.app", // Your actual deployment URL
     "https://adventure-safari-admin-frontend.vercel.app", // Keep this if you plan to use it
     "http://localhost:3000", // For local development
