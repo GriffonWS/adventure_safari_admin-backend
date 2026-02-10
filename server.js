@@ -26,6 +26,7 @@ const corsOptions = {
 };
 
 app.use(cors(corsOptions));
+app.options("*", cors(corsOptions)); // Handle preflight requests explicitly
 app.use(express.json());
 
 const PORT = process.env.PORT || 5000;
