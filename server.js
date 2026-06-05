@@ -12,14 +12,14 @@ import announcementRoutes from "./routes/announcementRoutes.js";
 const app = express();
 
 // CORS configuration
-// CORS configuration
 const corsOptions = {
   origin: [
-    "https://admin.adventuresafarinetwork.com", // Previous deployment URL
-    "https://adventure-safari-admin-frontend-k5u.vercel.app", // Your actual deployment URL
-    "https://adventure-safari-admin-frontend.vercel.app", // Keep this if you plan to use it
-    "http://localhost:3000", // For local development
-    "http://localhost:5173", // If using Vite
+    "https://admin.adventuresafarietwork.com", // Current deployment URL
+    "https://admin.adventuresafarinetwork.com", // Alternative spelling
+    "https://adventure-safari-admin-frontend-k5u.vercel.app", // Vercel deployment
+    "https://adventure-safari-admin-frontend.vercel.app", // Alternative Vercel
+    "http://localhost:3000", // Local development
+    "http://localhost:5173", // Vite development
   ],
   credentials: true,
   optionsSuccessStatus: 200,
