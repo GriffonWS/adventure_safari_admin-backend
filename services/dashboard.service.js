@@ -17,6 +17,40 @@ class DashboardService {
     });
   }
 
+  // Get users registered this month
+  async getUsersRegisteredThisMonth() {
+    const today = new Date();
+    const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+
+    return await User.countDocuments({
+      createdAt: { $gte: monthStart }
+    });
+  }
+
+  // Get users registered in last 30 days with details
+  async getUsersLast30Days() {
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+    return await User.find(
+      { createdAt: { $gte: thirtyDaysAgo } },
+      { password: 0, resetPasswordToken: 0, resetPasswordExpires: 0, twoFactorSecret: 0, twoFactorTempSecret: 0 }
+    ).sort({ createdAt: -1 });
+  }
+
+  // Get bookings from last 30 days with details
+  async getBookingsLast30Days() {
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+    return await Booking.find(
+      { createdAt: { $gte: thirtyDaysAgo } }
+    )
+      .populate('userId', 'name email')
+      .populate('tripId', 'title destination')
+      .sort({ createdAt: -1 });
+  }
+
   // Get total bookings count
   async getTotalBookings() {
     return await Booking.countDocuments();
@@ -93,6 +127,7 @@ class DashboardService {
     const [
       totalUsers,
       usersRegisteredToday,
+      usersRegisteredThisMonth,
       totalBookings,
       todaysBookings,
       userGrowthData,
@@ -100,6 +135,7 @@ class DashboardService {
     ] = await Promise.all([
       this.getTotalUsers(),
       this.getUsersRegisteredToday(),
+      this.getUsersRegisteredThisMonth(),
       this.getTotalBookings(),
       this.getTodaysBookings(),
       this.getUserGrowthData(),
@@ -108,10 +144,20 @@ class DashboardService {
 
     return {
       cardData: [
-        { title: "Total Users", value: totalUsers, icon: "👥" },
-        { title: "Users Registered Today", value: usersRegisteredToday, icon: "✨" },
-        { title: "Total Bookings", value: totalBookings, icon: "📋" },
-        { title: "Today's Bookings", value: todaysBookings, icon: "📅" }
+        {
+          title: "User Registrations",
+          icon: "👥",
+          today: usersRegisteredToday,
+          thisMonth: usersRegisteredThisMonth,
+          type: "users"
+        },
+        {
+          title: "Bookings",
+          icon: "📅",
+          today: todaysBookings,
+          thisMonth: totalBookings,
+          type: "bookings"
+        }
       ],
       userGrowthData,
       weeklyBookingsData

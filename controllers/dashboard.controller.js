@@ -41,3 +41,37 @@ export const getWeeklyBookingsData = async (req, res) => {
     });
   }
 };
+
+// Get users registered in last 30 days
+export const getUsersLast30Days = async (req, res) => {
+  try {
+    const users = await dashboardService.getUsersLast30Days();
+    res.status(200).json({
+      count: users.length,
+      users: users
+    });
+  } catch (error) {
+    console.error("Error fetching users last 30 days:", error);
+    res.status(500).json({
+      message: "Error fetching users data",
+      error: error.message
+    });
+  }
+};
+
+// Get bookings from last 30 days
+export const getBookingsLast30Days = async (req, res) => {
+  try {
+    const bookings = await dashboardService.getBookingsLast30Days();
+    res.status(200).json({
+      count: bookings.length,
+      bookings: bookings
+    });
+  } catch (error) {
+    console.error("Error fetching bookings last 30 days:", error);
+    res.status(500).json({
+      message: "Error fetching bookings data",
+      error: error.message
+    });
+  }
+};
