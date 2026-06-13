@@ -1,81 +1,5 @@
 import mongoose from "mongoose";
 
-// Guest Schema
-const guestSchema = new mongoose.Schema(
-  {
-    name: {
-      type: String,
-      required: true,
-      trim: true,
-    },
-    age: {
-      type: Number,
-      required: true,
-      min: 0,
-    },
-    gender: {
-      type: String,
-      enum: ["male", "female", "other"],
-    },
-    phone: {
-      type: String,
-      trim: true,
-    },
-    country: {
-      type: String,
-      trim: true,
-    },
-    state: {
-      type: String,
-      trim: true,
-    },
-    address: {
-      type: String,
-      trim: true,
-    },
-    // Passport Information
-    passport: {
-      type: String,
-      trim: true,
-    },
-    passportNumber: {
-      type: String,
-      trim: true,
-    },
-    passportCountry: {
-      type: String,
-      trim: true,
-    },
-    passportIssuedOn: {
-      type: Date,
-    },
-    passportExpiresOn: {
-      type: Date,
-    },
-    // Emergency Contact
-    emergencyContactName: {
-      type: String,
-      trim: true,
-    },
-    emergencyContactNumber: {
-      type: String,
-      trim: true,
-    },
-    // Documents
-    medicalCertificate: {
-      type: String,
-      trim: true,
-    },
-    travelInsurance: {
-      type: String,
-      trim: true,
-    },
-  },
-  {
-    timestamps: true,
-  }
-);
-
 // Booking Schema
 const bookingSchema = new mongoose.Schema(
   {
@@ -97,7 +21,11 @@ const bookingSchema = new mongoose.Schema(
       type: Date,
       default: Date.now,
     },
-    guests: [guestSchema], // Array of guest subdocuments
+    guestIds: [{
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Guest",
+      required: true,
+    }],
     bookingStatus: {
       type: String,
       enum: ["pending", "confirmed", "cancelled", "completed"],
@@ -109,17 +37,30 @@ const bookingSchema = new mongoose.Schema(
       default: "pending",
     },
     registrationPaymentDetails: {
-      transactionId: String,
-      paymentDate: Date,
-      amount: Number,
-      currency: String,
-      payerEmail: String,
-      payerName: String,
-      status: {
-        type: String,
-        enum: ["pending", "paid", "refunded"],
-        default: "pending",
+      requiredAmount: {
+        type: Number,
+        default: function() {
+          return (this.guestIds?.length || 0) * 25; // $25 per guest
+        }
       },
+      transactions: [{
+        transactionId: String,
+        guestId: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: "Guest",
+          required: true
+        },
+        amount: Number,
+        currency: String,
+        paymentDate: { type: Date, default: Date.now },
+        payerEmail: String,
+        payerName: String,
+        status: {
+          type: String,
+          enum: ["pending", "completed", "failed"],
+          default: "pending"
+        }
+      }]
     },
     acknowledge: {
       type: Boolean,
@@ -132,8 +73,6 @@ const bookingSchema = new mongoose.Schema(
 );
 
 // Export models
-const Guest = mongoose.model("Guest", guestSchema);
 const Booking = mongoose.model("Booking", bookingSchema);
 
-export { Guest };
 export default Booking;
