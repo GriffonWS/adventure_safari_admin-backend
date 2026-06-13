@@ -6,17 +6,17 @@ import {
   approvePassport,
   rejectPassport
 } from "../controllers/passportController.js";
-import { verifyAdminToken } from "../middleware/auth.js";
+import adminAuth from "../middleware/auth.js";
 
 const router = express.Router();
 
 // Get pending, approved, and rejected passports
-router.get("/pending", verifyAdminToken, getPendingPassports);
-router.get("/approved", verifyAdminToken, getApprovedPassports);
-router.get("/rejected", verifyAdminToken, getRejectedPassports);
+router.get("/pending", adminAuth, getPendingPassports);
+router.get("/approved", adminAuth, getApprovedPassports);
+router.get("/rejected", adminAuth, getRejectedPassports);
 
 // Approve and reject passports
-router.put("/approve/:guestId", verifyAdminToken, approvePassport);
-router.put("/reject/:guestId", verifyAdminToken, rejectPassport);
+router.put("/approve/:guestId", adminAuth, approvePassport);
+router.put("/reject/:guestId", adminAuth, rejectPassport);
 
 export default router;
