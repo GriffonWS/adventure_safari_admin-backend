@@ -165,3 +165,90 @@ export const getAllTrips = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
+
+// Get all pending guest approvals
+export const getPendingApprovals = async (req, res) => {
+  try {
+    const Guest = mongoose.model("Guest");
+    const pendingGuests = await Guest.find({
+      "passportApproval.status": "pending"
+    }).populate("userId", "name email").sort({ createdAt: -1 });
+
+    res.json(pendingGuests);
+  } catch (err) {
+    console.error("Error fetching pending approvals:", err);
+    res.status(500).json({ message: "Error fetching pending approvals" });
+  }
+};
+
+// Approve guest passport details
+export const approveGuest = async (req, res) => {
+  try {
+    const { guestId } = req.params;
+    const Guest = mongoose.model("Guest");
+
+    if (!mongoose.Types.ObjectId.isValid(guestId)) {
+      return res.status(400).json({ message: "Invalid guest ID" });
+    }
+
+    const guest = await Guest.findById(guestId);
+    if (!guest) {
+      return res.status(404).json({ message: "Guest not found" });
+    }
+
+    guest.passportApproval = {
+      status: "approved",
+      approvedBy: req.user?.id || req.adminId,
+      approvedAt: new Date()
+    };
+
+    await guest.save();
+
+    res.json({
+      message: "Guest approved successfully",
+      guest
+    });
+  } catch (err) {
+    console.error("Error approving guest:", err);
+    res.status(500).json({ message: "Error approving guest" });
+  }
+};
+
+// Reject guest passport details
+export const rejectGuest = async (req, res) => {
+  try {
+    const { guestId } = req.params;
+    const { reason } = req.body;
+    const Guest = mongoose.model("Guest");
+
+    if (!mongoose.Types.ObjectId.isValid(guestId)) {
+      return res.status(400).json({ message: "Invalid guest ID" });
+    }
+
+    if (!reason || reason.trim() === "") {
+      return res.status(400).json({ message: "Rejection reason is required" });
+    }
+
+    const guest = await Guest.findById(guestId);
+    if (!guest) {
+      return res.status(404).json({ message: "Guest not found" });
+    }
+
+    guest.passportApproval = {
+      status: "rejected",
+      rejectionReason: reason,
+      approvedBy: req.user?.id || req.adminId,
+      approvedAt: new Date()
+    };
+
+    await guest.save();
+
+    res.json({
+      message: "Guest rejected successfully",
+      guest
+    });
+  } catch (err) {
+    console.error("Error rejecting guest:", err);
+    res.status(500).json({ message: "Error rejecting guest" });
+  }
+};
