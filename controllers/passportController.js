@@ -14,14 +14,15 @@ export const getPendingPassports = async (req, res) => {
 
     const bookings = await Booking.find({
       guestIds: { $in: pendingPassports.map(g => g._id) }
-    }).populate("tripId", "name destination");
+    }).populate("tripId", "name destination endDate");
 
     const result = pendingPassports.map(guest => {
       const booking = bookings.find(b => b.guestIds.includes(guest._id));
       return {
         guest,
         booking,
-        tripName: booking?.tripId?.name || "Unknown Trip"
+        tripName: booking?.tripId?.name || "Unknown Trip",
+        tripEndDate: booking?.tripId?.endDate
       };
     });
 
@@ -46,10 +47,24 @@ export const getApprovedPassports = async (req, res) => {
       .populate("passportApproval.approvedBy", "name email")
       .sort({ "passportApproval.approvedAt": -1 });
 
+    const bookings = await Booking.find({
+      guestIds: { $in: approvedPassports.map(g => g._id) }
+    }).populate("tripId", "name destination endDate");
+
+    const result = approvedPassports.map(guest => {
+      const booking = bookings.find(b => b.guestIds.includes(guest._id));
+      return {
+        guest,
+        booking,
+        tripName: booking?.tripId?.name || "Unknown Trip",
+        tripEndDate: booking?.tripId?.endDate
+      };
+    });
+
     res.status(200).json({
       message: "Approved passports retrieved successfully",
-      total: approvedPassports.length,
-      data: approvedPassports
+      total: result.length,
+      data: result
     });
   } catch (error) {
     console.error("Get approved passports error:", error);
@@ -67,10 +82,24 @@ export const getRejectedPassports = async (req, res) => {
       .populate("passportApproval.approvedBy", "name email")
       .sort({ "passportApproval.approvedAt": -1 });
 
+    const bookings = await Booking.find({
+      guestIds: { $in: rejectedPassports.map(g => g._id) }
+    }).populate("tripId", "name destination endDate");
+
+    const result = rejectedPassports.map(guest => {
+      const booking = bookings.find(b => b.guestIds.includes(guest._id));
+      return {
+        guest,
+        booking,
+        tripName: booking?.tripId?.name || "Unknown Trip",
+        tripEndDate: booking?.tripId?.endDate
+      };
+    });
+
     res.status(200).json({
       message: "Rejected passports retrieved successfully",
-      total: rejectedPassports.length,
-      data: rejectedPassports
+      total: result.length,
+      data: result
     });
   } catch (error) {
     console.error("Get rejected passports error:", error);
