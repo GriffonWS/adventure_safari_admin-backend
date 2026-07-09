@@ -3,7 +3,16 @@ import Inquiry from "../models/Inquiry.js";
 // Get all inquiries
 export const getAllInquiries = async (req, res) => {
   try {
-    const inquiries = await Inquiry.find().sort({ createdAt: -1 });
+    let inquiries = await Inquiry.find().sort({ createdAt: -1 });
+
+    // Ensure all inquiries have a status field (for backward compatibility)
+    inquiries = inquiries.map(inquiry => {
+      const inquiryObj = inquiry.toObject();
+      if (!inquiryObj.status) {
+        inquiryObj.status = "new";
+      }
+      return inquiryObj;
+    });
 
     return res.status(200).json({
       success: true,
@@ -21,7 +30,7 @@ export const getAllInquiries = async (req, res) => {
 // Get inquiry by ID
 export const getInquiryById = async (req, res) => {
   try {
-    const inquiry = await Inquiry.findById(req.params.id);
+    let inquiry = await Inquiry.findById(req.params.id);
 
     if (!inquiry) {
       return res.status(404).json({
@@ -30,9 +39,15 @@ export const getInquiryById = async (req, res) => {
       });
     }
 
+    // Ensure status field exists (for backward compatibility)
+    const inquiryObj = inquiry.toObject();
+    if (!inquiryObj.status) {
+      inquiryObj.status = "new";
+    }
+
     return res.status(200).json({
       success: true,
-      data: inquiry,
+      data: inquiryObj,
     });
   } catch (error) {
     console.error("Error fetching inquiry:", error.message);

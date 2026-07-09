@@ -10,6 +10,7 @@ import tripRoutes from "./routes/trip.routes.js";
 import announcementRoutes from "./routes/announcementRoutes.js";
 import passportRoutes from "./routes/passport.routes.js";
 import inquiryRoutes from "./routes/inquiryRoutes.js";
+import colorSettingsRoutes from "./routes/colorSettingsRoutes.js";
 
 const app = express();
 
@@ -45,6 +46,7 @@ app.use("/api/trips", tripRoutes);
 app.use("/api/announcements", announcementRoutes);
 app.use("/api/passports", passportRoutes);
 app.use("/api/inquiries", inquiryRoutes);
+app.use("/api/settings/colors", colorSettingsRoutes);
 
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
