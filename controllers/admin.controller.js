@@ -2,6 +2,7 @@ import User from "../models/User.js";
 import Booking from "../models/Booking.js";
 import Trip from "../models/Trip.js";
 import mongoose from "mongoose";
+import { deleteCloudinaryFile } from "../middleware/documentUpload.js";
 
 // Get all users with booking counts
 export const getAllUsers = async (req, res) => {
@@ -80,6 +81,93 @@ export const getBookingById = async (req, res) => {
   } catch (err) {
     console.error("Error fetching booking:", err);
     res.status(500).json({ message: "Error fetching booking" });
+  }
+};
+
+export const updateAirArrangement = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { arrangedBy } = req.body;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ message: "Invalid booking ID" });
+    }
+
+    if (!["self", "company"].includes(arrangedBy)) {
+      return res.status(400).json({ message: "arrangedBy must be 'self' or 'company'" });
+    }
+
+    const booking = await Booking.findById(id);
+    if (!booking) {
+      return res.status(404).json({ message: "Booking not found" });
+    }
+
+    if (!booking.airTravel) {
+      booking.airTravel = {};
+    }
+    booking.airTravel.arrangedBy = arrangedBy;
+    await booking.save();
+
+    const updatedBooking = await Booking.findById(id)
+      .populate("userId", "name email phone")
+      .populate("tripId", "name destination price duration")
+      .populate("guestIds");
+
+    res.json({
+      message: "Air travel arrangement updated successfully",
+      booking: updatedBooking,
+    });
+  } catch (err) {
+    console.error("Error updating air arrangement:", err);
+    res.status(500).json({ message: "Error updating air travel arrangement" });
+  }
+};
+
+export const uploadAirTicket = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ message: "Invalid booking ID" });
+    }
+
+    if (!req.file) {
+      return res.status(400).json({ message: "No air ticket file uploaded" });
+    }
+
+    const booking = await Booking.findById(id);
+    if (!booking) {
+      return res.status(404).json({ message: "Booking not found" });
+    }
+
+    if (!booking.airTravel) {
+      booking.airTravel = {};
+    }
+
+    const oldPublicId = booking.airTravel.ticketPublicId;
+    if (oldPublicId) {
+      await deleteCloudinaryFile(oldPublicId);
+    }
+
+    booking.airTravel.ticketUrl = req.fileUrl;
+    booking.airTravel.ticketPublicId = req.fileId;
+    booking.airTravel.uploadedBy = "admin";
+    booking.airTravel.uploadedAt = new Date();
+    await booking.save();
+
+    const updatedBooking = await Booking.findById(id)
+      .populate("userId", "name email phone")
+      .populate("tripId", "name destination price duration")
+      .populate("guestIds");
+
+    res.json({
+      message: "Air ticket uploaded successfully",
+      ticketUrl: req.fileUrl,
+      booking: updatedBooking,
+    });
+  } catch (err) {
+    console.error("Error uploading air ticket:", err);
+    res.status(500).json({ message: "Error uploading air ticket" });
   }
 };
 

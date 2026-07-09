@@ -66,6 +66,28 @@ const bookingSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    airTravel: {
+      arrangedBy: {
+        type: String,
+        enum: ["self", "company"],
+      },
+      ticketUrl: {
+        type: String,
+        trim: true,
+        default: "",
+      },
+      ticketPublicId: {
+        type: String,
+        default: "",
+      },
+      uploadedBy: {
+        type: String,
+        enum: ["client", "admin"],
+      },
+      uploadedAt: {
+        type: Date,
+      },
+    },
   },
   {
     timestamps: true,

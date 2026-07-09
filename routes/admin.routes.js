@@ -8,9 +8,12 @@ import {
   getBookingById,
   getPendingApprovals,
   approveGuest,
-  rejectGuest
+  rejectGuest,
+  updateAirArrangement,
+  uploadAirTicket
 } from "../controllers/admin.controller.js";
 import adminAuth from "../middleware/auth.js";
+import { uploadSingleDocument } from "../middleware/documentUpload.js";
 const router = express.Router();
 
 router.get("/all-users", adminAuth, getAllUsers);
@@ -23,5 +26,8 @@ router.post("/create-booking", adminAuth, createBooking);
 router.get("/pending-approvals", adminAuth, getPendingApprovals);
 router.put("/approve-guest/:guestId", adminAuth, approveGuest);
 router.put("/reject-guest/:guestId", adminAuth, rejectGuest);
+
+router.put("/air-arrangement/:id", adminAuth, updateAirArrangement);
+router.put("/upload-air-ticket/:id", adminAuth, uploadSingleDocument("airTicket"), uploadAirTicket);
 
 export default router;
