@@ -70,7 +70,7 @@ export const getBookingById = async (req, res) => {
     const booking = await Booking.findById(id)
       .populate("userId", "name email phone")
       .populate("tripId", "name destination price duration")
-      .populate("guests");
+      .populate("guestIds");
 
     if (!booking) {
       return res.status(404).json({ message: "Booking not found" });
