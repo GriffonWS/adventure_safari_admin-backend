@@ -43,6 +43,10 @@ const bookingSchema = new mongoose.Schema(
           return (this.guestIds?.length || 0) * 25; // $25 per guest
         }
       },
+      paidGuestIds: [{
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Guest"
+      }],
       transactions: [{
         transactionId: String,
         guestId: {

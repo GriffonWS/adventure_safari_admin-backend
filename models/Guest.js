@@ -121,11 +121,46 @@ const guestSchema = new mongoose.Schema(
       type: String,
       trim: true,
     },
+    // Medical Appointment
+    medicalAppointmentDate: {
+      type: Date,
+    },
+    medicalAppointmentCompleted: {
+      type: Boolean,
+      default: false,
+    },
+    medicalAppointmentCompletedDate: {
+      type: Date,
+    },
+    medicalFollowUpAppointmentDate: {
+      type: Date,
+    },
+    // Health Information
+    healthInfo: {
+      hasPhysicalDisability: Boolean,
+      physicalDisabilityDetails: String,
+      hasMedicalHistory: Boolean,
+      medicalHistoryDetails: String,
+      hasWalkingDifficulty: Boolean,
+      walkingDifficultyDetails: String,
+      hasDietaryRequirements: Boolean,
+      dietaryRequirementsDetails: String,
+      hasAllergies: Boolean,
+      allergiesDetails: String,
+      hasAltitudeExperience: Boolean,
+      altitudeExperienceDetails: String,
+      weight: String,
+      additionalHealthInfo: String,
+    },
     // Documents
     medicalCertificate: {
       type: String,
       trim: true,
     },
+    previousPassports: [{
+      url: String,
+      replacedAt: { type: Date, default: Date.now },
+    }],
     travelInsurance: {
       type: String,
       trim: true,
@@ -160,7 +195,8 @@ const guestSchema = new mongoose.Schema(
     specialOccasion: {
       type: {
         type: String,
-        enum: ["birthday", "anniversary", "other"],
+        enum: ["birthday", "anniversary", "other", ""],
+        default: "",
       },
       date: Date,
       comments: String,

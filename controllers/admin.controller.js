@@ -70,7 +70,7 @@ export const getBookingById = async (req, res) => {
 
     const booking = await Booking.findById(id)
       .populate("userId", "name email phone")
-      .populate("tripId", "name destination price duration")
+      .populate("tripId", "name destination price")
       .populate("guestIds");
 
     if (!booking) {
@@ -110,7 +110,7 @@ export const updateAirArrangement = async (req, res) => {
 
     const updatedBooking = await Booking.findById(id)
       .populate("userId", "name email phone")
-      .populate("tripId", "name destination price duration")
+      .populate("tripId", "name destination price")
       .populate("guestIds");
 
     res.json({
@@ -157,7 +157,7 @@ export const uploadAirTicket = async (req, res) => {
 
     const updatedBooking = await Booking.findById(id)
       .populate("userId", "name email phone")
-      .populate("tripId", "name destination price duration")
+      .populate("tripId", "name destination price")
       .populate("guestIds");
 
     res.json({
@@ -259,11 +259,15 @@ export const getAllTrips = async (req, res) => {
 export const getPendingApprovals = async (req, res) => {
   try {
     const Guest = mongoose.model("Guest");
-    const pendingGuests = await Guest.find({
-      "passportApproval.status": "pending"
-    }).populate("userId", "name email").sort({ createdAt: -1 });
+    // Return every status so the Pending / Approved / Rejected tabs can be filtered client-side
+    const guests = await Guest.find({
+      "passportApproval.status": { $in: ["pending", "approved", "rejected"] }
+    })
+      .populate("userId", "name email")
+      .populate("passportApproval.approvedBy", "name email")
+      .sort({ createdAt: -1 });
 
-    res.json(pendingGuests);
+    res.json(guests);
   } catch (err) {
     console.error("Error fetching pending approvals:", err);
     res.status(500).json({ message: "Error fetching pending approvals" });
@@ -280,18 +284,26 @@ export const approveGuest = async (req, res) => {
       return res.status(400).json({ message: "Invalid guest ID" });
     }
 
-    const guest = await Guest.findById(guestId);
+    // Update only the approval fields so unrelated legacy data on the guest
+    // document cannot fail validation and block the approval
+    const guest = await Guest.findByIdAndUpdate(
+      guestId,
+      {
+        $set: {
+          passportApproval: {
+            status: "approved",
+            approvedBy: req.user?.id || req.adminId,
+            rejectionReason: undefined,
+            approvedAt: new Date()
+          }
+        }
+      },
+      { new: true, runValidators: false }
+    );
+
     if (!guest) {
       return res.status(404).json({ message: "Guest not found" });
     }
-
-    guest.passportApproval = {
-      status: "approved",
-      approvedBy: req.user?.id || req.adminId,
-      approvedAt: new Date()
-    };
-
-    await guest.save();
 
     res.json({
       message: "Guest approved successfully",
@@ -299,7 +311,7 @@ export const approveGuest = async (req, res) => {
     });
   } catch (err) {
     console.error("Error approving guest:", err);
-    res.status(500).json({ message: "Error approving guest" });
+    res.status(500).json({ message: err.message || "Error approving guest" });
   }
 };
 
@@ -318,19 +330,26 @@ export const rejectGuest = async (req, res) => {
       return res.status(400).json({ message: "Rejection reason is required" });
     }
 
-    const guest = await Guest.findById(guestId);
+    // Update only the approval fields so unrelated legacy data on the guest
+    // document cannot fail validation and block the rejection
+    const guest = await Guest.findByIdAndUpdate(
+      guestId,
+      {
+        $set: {
+          passportApproval: {
+            status: "rejected",
+            rejectionReason: reason.trim(),
+            approvedBy: req.user?.id || req.adminId,
+            approvedAt: new Date()
+          }
+        }
+      },
+      { new: true, runValidators: false }
+    );
+
     if (!guest) {
       return res.status(404).json({ message: "Guest not found" });
     }
-
-    guest.passportApproval = {
-      status: "rejected",
-      rejectionReason: reason,
-      approvedBy: req.user?.id || req.adminId,
-      approvedAt: new Date()
-    };
-
-    await guest.save();
 
     res.json({
       message: "Guest rejected successfully",
@@ -338,6 +357,6 @@ export const rejectGuest = async (req, res) => {
     });
   } catch (err) {
     console.error("Error rejecting guest:", err);
-    res.status(500).json({ message: "Error rejecting guest" });
+    res.status(500).json({ message: err.message || "Error rejecting guest" });
   }
 };
