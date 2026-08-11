@@ -360,3 +360,104 @@ export const rejectGuest = async (req, res) => {
     res.status(500).json({ message: err.message || "Error rejecting guest" });
   }
 };
+
+export const setInstallmentPlan = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { installments } = req.body;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ message: "Invalid booking ID" });
+    }
+
+    const booking = await Booking.findById(id).populate("tripId", "price");
+    if (!booking) {
+      return res.status(404).json({ message: "Booking not found" });
+    }
+
+    const existing = booking.finalPayment?.installments || [];
+    const paid = existing.filter((i) => i.status === "paid");
+
+    if (!Array.isArray(installments) || installments.length === 0) {
+      if (paid.length > 0) {
+        return res.status(400).json({
+          message: "Cannot remove the plan once an installment has been paid",
+        });
+      }
+      booking.finalPayment = { installmentsEnabled: false, installments: [] };
+      await booking.save();
+      const cleared = await Booking.findById(id)
+        .populate("userId", "name email phone")
+        .populate("tripId", "name destination price")
+        .populate("guestIds");
+      return res.json({ message: "Installment plan removed", booking: cleared });
+    }
+
+    // Incoming rows describe the unpaid part of the plan; paid ones are untouchable
+    const newCount = paid.length + installments.length;
+
+    if (newCount > 4) {
+      return res.status(400).json({ message: "A maximum of 4 installments is allowed" });
+    }
+    if (paid.length > 0 && newCount < existing.length) {
+      return res.status(400).json({
+        message: `A payment has already been made, so the plan cannot drop below ${existing.length} installments`,
+      });
+    }
+
+    const totalAmount = (booking.tripId?.price || 0) * (booking.guestIds?.length || 0);
+    const paidSum = paid.reduce((acc, i) => acc + (Number(i.amount) || 0), 0);
+    const outstanding = Number((totalAmount - paidSum).toFixed(2));
+    const parsed = [];
+
+    for (const item of installments) {
+      const amount = Number(item.amount);
+      const dueDate = new Date(item.dueDate);
+
+      if (!Number.isFinite(amount) || amount <= 0) {
+        return res.status(400).json({ message: "Each installment needs an amount greater than 0" });
+      }
+      if (Number.isNaN(dueDate.getTime())) {
+        return res.status(400).json({ message: "Each installment needs a valid due date" });
+      }
+      parsed.push({ amount, dueDate });
+    }
+
+    const sum = parsed.reduce((acc, i) => acc + i.amount, 0);
+    if (Math.abs(sum - outstanding) > 0.01) {
+      return res.status(400).json({
+        message: `Remaining installments must add up to ${outstanding.toFixed(2)}`,
+      });
+    }
+
+    parsed.push(
+      ...paid.map((i) => ({
+        amount: i.amount,
+        dueDate: i.dueDate,
+        status: "paid",
+        transactionId: i.transactionId,
+        paidAt: i.paidAt,
+        payerEmail: i.payerEmail,
+        payerName: i.payerName,
+      }))
+    );
+    parsed.sort((a, b) => a.dueDate - b.dueDate);
+
+    booking.finalPayment = {
+      installmentsEnabled: true,
+      totalAmount,
+      installments: parsed,
+    };
+    await booking.save();
+
+    const updatedBooking = await Booking.findById(id)
+      .populate("userId", "name email phone")
+      .populate("tripId", "name destination price")
+      .populate("guestIds");
+
+    res.json({ message: "Installment plan saved", booking: updatedBooking });
+  } catch (err) {
+    console.error("Error saving installment plan:", err);
+    res.status(500).json({ message: "Error saving installment plan" });
+  }
+};

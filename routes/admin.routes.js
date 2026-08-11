@@ -10,7 +10,8 @@ import {
   approveGuest,
   rejectGuest,
   updateAirArrangement,
-  uploadAirTicket
+  uploadAirTicket,
+  setInstallmentPlan
 } from "../controllers/admin.controller.js";
 import adminAuth from "../middleware/auth.js";
 import { uploadSingleDocument } from "../middleware/documentUpload.js";
@@ -29,5 +30,6 @@ router.put("/reject-guest/:guestId", adminAuth, rejectGuest);
 
 router.put("/air-arrangement/:id", adminAuth, updateAirArrangement);
 router.put("/upload-air-ticket/:id", adminAuth, uploadSingleDocument("airTicket"), uploadAirTicket);
+router.put("/installment-plan/:id", adminAuth, setInstallmentPlan);
 
 export default router;
