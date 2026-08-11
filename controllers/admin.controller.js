@@ -461,3 +461,32 @@ export const setInstallmentPlan = async (req, res) => {
     res.status(500).json({ message: "Error saving installment plan" });
   }
 };
+
+export const updateTravelKey = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { travelKey } = req.body;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ message: "Invalid booking ID" });
+    }
+
+    const booking = await Booking.findByIdAndUpdate(
+      id,
+      { travelKey: typeof travelKey === "string" ? travelKey.trim() : "" },
+      { new: true }
+    )
+      .populate("userId", "name email phone")
+      .populate("tripId", "name destination price")
+      .populate("guestIds");
+
+    if (!booking) {
+      return res.status(404).json({ message: "Booking not found" });
+    }
+
+    res.json({ message: "Travel key updated", booking });
+  } catch (err) {
+    console.error("Error updating travel key:", err);
+    res.status(500).json({ message: "Error updating travel key" });
+  }
+};
