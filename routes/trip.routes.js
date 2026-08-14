@@ -4,12 +4,16 @@ import {
   getTripById,
   createTrip,
   updateTrip,
-  deleteTrip,
-  toggleTripStatus
+  toggleTripStatus,
+  uploadTripImage
 } from "../controllers/trip.controller.js";
 import adminAuth from "../middleware/auth.js";
+import { uploadSingleImage } from "../middleware/documentUpload.js";
 
 const router = express.Router();
+
+// Upload a trip image to Cloudinary, returns the hosted URL
+router.post("/upload-image", adminAuth, uploadSingleImage("image"), uploadTripImage);
 
 // Get all trips
 router.get("/", adminAuth, getAllTrips);
@@ -23,8 +27,8 @@ router.post("/", adminAuth, createTrip);
 // Update trip
 router.put("/:id", adminAuth, updateTrip);
 
-// Delete trip
-router.delete("/:id", adminAuth, deleteTrip);
+// Trips are never deleted — they are deactivated with toggle-status below,
+// so bookings that reference a trip always keep a valid trip.
 
 // Toggle trip active status
 router.patch("/:id/toggle-status", adminAuth, toggleTripStatus);

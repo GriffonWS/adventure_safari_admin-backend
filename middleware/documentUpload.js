@@ -65,6 +65,71 @@ export const uploadSingleDocument = (fieldName) => {
   };
 };
 
+// Trip hero images live in their own folder and are images only (no PDFs),
+// with a larger size limit than documents since they're used as backdrops.
+const imageStorage = new CloudinaryStorage({
+  cloudinary,
+  params: {
+    folder: "trip-images",
+    allowed_formats: ["jpg", "png", "jpeg", "webp"],
+    resource_type: "image",
+    transformation: [
+      {
+        width: 1600,
+        height: 1600,
+        crop: "limit",
+        quality: "auto",
+        format: "auto",
+      },
+    ],
+  },
+});
+
+const imageUpload = multer({
+  storage: imageStorage,
+  limits: {
+    fileSize: 8 * 1024 * 1024,
+  },
+  fileFilter: (req, file, cb) => {
+    const allowedMimeTypes = [
+      "image/jpeg",
+      "image/jpg",
+      "image/png",
+      "image/webp",
+    ];
+    if (allowedMimeTypes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error("Invalid file type. Only JPG, PNG, and WEBP images are allowed."), false);
+    }
+  },
+});
+
+export const uploadSingleImage = (fieldName) => {
+  return (req, res, next) => {
+    configureCloudinary();
+    const singleUpload = imageUpload.single(fieldName);
+
+    singleUpload(req, res, (err) => {
+      if (err instanceof multer.MulterError) {
+        if (err.code === "LIMIT_FILE_SIZE") {
+          return res.status(400).json({ message: "Image too large. Maximum size is 8MB." });
+        }
+        return res.status(400).json({ message: `Upload error: ${err.message}` });
+      } else if (err) {
+        return res.status(400).json({ message: err.message });
+      }
+
+      if (req.file) {
+        req.fileUrl = req.file.path;
+        req.fileId = req.file.filename;
+      }
+
+      next();
+    });
+  };
+};
+
 export const deleteCloudinaryFile = async (publicId) => {
   try {
     configureCloudinary();

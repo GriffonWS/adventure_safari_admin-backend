@@ -52,17 +52,24 @@ export const updateTrip = async (req, res) => {
   }
 };
 
-// Delete trip
-export const deleteTrip = async (req, res) => {
+// Trips are never deleted, only deactivated — see toggleTripStatus below.
+
+// Upload a trip image to Cloudinary and hand back the hosted URL.
+// The form uploads first, then submits the trip with the returned URL.
+export const uploadTripImage = async (req, res) => {
   try {
-    const { id } = req.params;
-    await tripService.deleteTrip(id);
-    res.status(200).json({
-      message: "Trip deleted successfully"
+    if (!req.file) {
+      return res.status(400).json({ message: "No image uploaded" });
+    }
+
+    res.status(201).json({
+      message: "Image uploaded successfully",
+      imageUrl: req.fileUrl,
+      publicId: req.fileId,
     });
   } catch (error) {
-    console.error("Error deleting trip:", error);
-    res.status(404).json({ message: error.message || "Error deleting trip" });
+    console.error("Error uploading trip image:", error);
+    res.status(500).json({ message: error.message || "Error uploading trip image" });
   }
 };
 
