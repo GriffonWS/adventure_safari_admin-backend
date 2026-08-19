@@ -1,4 +1,5 @@
 import Trip from "../models/Trip.js";
+import { normalizePricingTiers, derivePriceFromTiers } from "../utils/pricing.js";
 
 class TripService {
   // Get all trips
@@ -17,10 +18,16 @@ class TripService {
 
   // Create new trip
   async createTrip(tripData) {
-    const { name, destination, price, image, wetuLink, isActive, isCustom, assignedUserId } = tripData;
+    const { name, destination, price, image, wetuLink, isActive, isCustom, assignedUserId, pricing } = tripData;
+
+    // A trip is priced either as one flat per-person amount or as a list of
+    // traveller types. When the list is given it is the source of truth and
+    // `price` becomes the cheapest of them, so the catalogue still has a figure.
+    const tiers = normalizePricingTiers(pricing);
+    const headlinePrice = tiers.length ? derivePriceFromTiers(tiers) : price;
 
     // Validate required fields
-    if (!name || !destination || !price || !image) {
+    if (!name || !destination || !headlinePrice || !image) {
       throw new Error("Name, destination, price, and image are required");
     }
 
@@ -38,7 +45,8 @@ class TripService {
     const trip = new Trip({
       name,
       destination,
-      price,
+      price: headlinePrice,
+      pricing: tiers,
       image,
       wetuLink: wetuLink || "",
       isCustom: Boolean(isCustom),
@@ -65,6 +73,17 @@ class TripService {
     for (const field of editableFields) {
       if (updateData[field] !== undefined) {
         trip[field] = updateData[field];
+      }
+    }
+
+    // Editing traveller types repoints the headline price at the cheapest one.
+    // Bookings already made keep the amounts they froze, so nothing here can
+    // change what an existing traveller was quoted or insured for.
+    if (updateData.pricing !== undefined) {
+      const tiers = normalizePricingTiers(updateData.pricing);
+      trip.pricing = tiers;
+      if (tiers.length) {
+        trip.price = derivePriceFromTiers(tiers);
       }
     }
 

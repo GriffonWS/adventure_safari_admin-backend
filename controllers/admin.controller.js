@@ -2,7 +2,9 @@ import User from "../models/User.js";
 import Booking from "../models/Booking.js";
 import Trip from "../models/Trip.js";
 import mongoose from "mongoose";
+import Guest from "../models/Guest.js";
 import { deleteCloudinaryFile } from "../middleware/documentUpload.js";
+import { buildGuestPricing, bookingTripTotal } from "../utils/pricing.js";
 
 // Get all users with booking counts
 export const getAllUsers = async (req, res) => {
@@ -49,7 +51,7 @@ export const getAllBookings = async (req, res) => {
   try {
     const bookings = await Booking.find()
       .populate("userId", "name email")
-      .populate("tripId", "name destination price")
+      .populate("tripId", "name destination price pricing")
       .sort({ createdAt: -1 }); // Latest bookings first
 
     res.json(bookings);
@@ -70,7 +72,7 @@ export const getBookingById = async (req, res) => {
 
     const booking = await Booking.findById(id)
       .populate("userId", "name email phone")
-      .populate("tripId", "name destination price")
+      .populate("tripId", "name destination price pricing")
       .populate("guestIds");
 
     if (!booking) {
@@ -110,7 +112,7 @@ export const updateAirArrangement = async (req, res) => {
 
     const updatedBooking = await Booking.findById(id)
       .populate("userId", "name email phone")
-      .populate("tripId", "name destination price")
+      .populate("tripId", "name destination price pricing")
       .populate("guestIds");
 
     res.json({
@@ -157,7 +159,7 @@ export const uploadAirTicket = async (req, res) => {
 
     const updatedBooking = await Booking.findById(id)
       .populate("userId", "name email phone")
-      .populate("tripId", "name destination price")
+      .populate("tripId", "name destination price pricing")
       .populate("guestIds");
 
     res.json({
@@ -199,6 +201,11 @@ export const createBooking = async (req, res) => {
       }
     }
 
+    const bookingDate = new Date(travelDate);
+    if (Number.isNaN(bookingDate.getTime())) {
+      return res.status(400).json({ message: "Invalid travel date" });
+    }
+
     // Check if user exists
     const user = await User.findById(userId);
     if (!user) {
@@ -215,23 +222,61 @@ export const createBooking = async (req, res) => {
       return res.status(400).json({ message: "Trip is not available" });
     }
 
-    // Calculate total amount (price per person)
-    const totalAmount = trip.price * guests.length;
+    // Travellers are stored as Guest documents, the same as a booking the
+    // customer makes themselves, so every later screen reads one shape.
+    const createdGuests = await Guest.insertMany(
+      guests.map((guest) => ({
+        userId,
+        name: String(guest.name).trim(),
+        age: Number(guest.age),
+        passport: guest.passport,
+      }))
+    );
+
+    // Freeze what each traveller is being charged. This snapshot is the trip
+    // cost their insurance is declared against, so it is stored on the booking
+    // rather than read back off the trip, which may later be repriced.
+    let guestPricing;
+    let tripTotal;
+    try {
+      ({ guestPricing, tripTotal } = buildGuestPricing(
+        trip,
+        createdGuests.map((created, i) => ({
+          guestId: created._id,
+          name: created.name,
+          age: created.age,
+          tierCode: guests[i]?.tierCode,
+        }))
+      ));
+    } catch (pricingError) {
+      // The guests just created would otherwise be left orphaned on a failure.
+      await Guest.deleteMany({ _id: { $in: createdGuests.map((g) => g._id) } });
+      return res.status(400).json({ message: pricingError.message });
+    }
+
+    const bookingReference = [
+      trip.name.replace(/[^a-zA-Z0-9]/g, "").toUpperCase().substring(0, 4).padEnd(3, "X"),
+      bookingDate.toISOString().slice(0, 10).replace(/-/g, ""),
+      Math.floor(10000 + Math.random() * 90000),
+    ].join("-");
 
     // Create booking
     const booking = new Booking({
       userId,
       tripId,
-      guests,
-      totalAmount,
-      travelDate: new Date(travelDate),
+      bookingId: bookingReference,
+      guestIds: createdGuests.map((g) => g._id),
+      guestPricing,
+      tripTotal,
+      bookingDate,
     });
 
     await booking.save();
 
     // Populate the booking before sending response
     await booking.populate("userId", "name email");
-    await booking.populate("tripId", "name destination price");
+    await booking.populate("tripId", "name destination price pricing");
+    await booking.populate("guestIds");
 
     res.status(201).json({
       message: "Booking created successfully",
@@ -248,7 +293,7 @@ export const createBooking = async (req, res) => {
 export const getAllTrips = async (req, res) => {
   try {
     // Assuming you have a Trip model
-    const trips = await Trip.find({}).select("name destination price duration"); // Adjust fields as needed
+    const trips = await Trip.find({}).select("name destination price pricing duration"); // Adjust fields as needed
     res.status(200).json(trips);
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -388,7 +433,7 @@ export const setInstallmentPlan = async (req, res) => {
       await booking.save();
       const cleared = await Booking.findById(id)
         .populate("userId", "name email phone")
-        .populate("tripId", "name destination price")
+        .populate("tripId", "name destination price pricing")
         .populate("guestIds");
       return res.json({ message: "Installment plan removed", booking: cleared });
     }
@@ -405,7 +450,9 @@ export const setInstallmentPlan = async (req, res) => {
       });
     }
 
-    const totalAmount = (booking.tripId?.price || 0) * (booking.guestIds?.length || 0);
+    // The booking's own frozen trip cost, so repricing the trip afterwards can
+    // never invalidate a plan the customer has already agreed to.
+    const totalAmount = bookingTripTotal(booking);
     const paidSum = paid.reduce((acc, i) => acc + (Number(i.amount) || 0), 0);
     const outstanding = Number((totalAmount - paidSum).toFixed(2));
     const parsed = [];
@@ -452,7 +499,7 @@ export const setInstallmentPlan = async (req, res) => {
 
     const updatedBooking = await Booking.findById(id)
       .populate("userId", "name email phone")
-      .populate("tripId", "name destination price")
+      .populate("tripId", "name destination price pricing")
       .populate("guestIds");
 
     res.json({ message: "Installment plan saved", booking: updatedBooking });
@@ -477,7 +524,7 @@ export const updateTravelKey = async (req, res) => {
       { new: true }
     )
       .populate("userId", "name email phone")
-      .populate("tripId", "name destination price")
+      .populate("tripId", "name destination price pricing")
       .populate("guestIds");
 
     if (!booking) {

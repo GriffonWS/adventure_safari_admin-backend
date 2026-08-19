@@ -95,8 +95,18 @@ export const seedTrips = async () => {
       return;
     }
 
-    // Insert sample trips
-    const trips = await Trip.insertMany(sampleTrips);
+    // Seeded trips get an Adult/Child split so the per-traveller pricing path is
+    // exercised from a fresh database, with the flat price as the adult rate.
+    const trips = await Trip.insertMany(
+      sampleTrips.map((trip) => ({
+        ...trip,
+        price: Math.round(trip.price * 0.7),
+        pricing: [
+          { code: "adult", label: "Adult", amount: trip.price, ageMin: 18 },
+          { code: "child", label: "Child", amount: Math.round(trip.price * 0.7), ageMin: 0, ageMax: 17 },
+        ],
+      }))
+    );
     console.log(`Successfully seeded ${trips.length} trips!`);
     
     return trips;
