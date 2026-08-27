@@ -5,6 +5,7 @@ import mongoose from "mongoose";
 import Guest from "../models/Guest.js";
 import { deleteCloudinaryFile } from "../middleware/documentUpload.js";
 import { buildGuestPricing, bookingTripTotal } from "../utils/pricing.js";
+import { buildBookingReference } from "../utils/reference.js";
 
 // Get all users with booking counts
 export const getAllUsers = async (req, res) => {
@@ -49,9 +50,21 @@ export const getAllUsers = async (req, res) => {
 // Get all bookings with user and trip details
 export const getAllBookings = async (req, res) => {
   try {
-    const bookings = await Booking.find()
+    // Several customers can share one custom trip, each booking separately.
+    // Filtering by trip is what pulls those bookings back together.
+    const { tripId } = req.query;
+    const filter = {};
+    if (tripId) {
+      if (!mongoose.Types.ObjectId.isValid(tripId)) {
+        return res.status(400).json({ message: "Invalid trip ID" });
+      }
+      filter.tripId = tripId;
+    }
+
+    const bookings = await Booking.find(filter)
       .populate("userId", "name email")
       .populate("tripId", "name destination price pricing")
+      .populate("guestIds", "name")
       .sort({ createdAt: -1 }); // Latest bookings first
 
     res.json(bookings);
@@ -254,11 +267,9 @@ export const createBooking = async (req, res) => {
       return res.status(400).json({ message: pricingError.message });
     }
 
-    const bookingReference = [
-      trip.name.replace(/[^a-zA-Z0-9]/g, "").toUpperCase().substring(0, 4).padEnd(3, "X"),
-      bookingDate.toISOString().slice(0, 10).replace(/-/g, ""),
-      Math.floor(10000 + Math.random() * 90000),
-    ].join("-");
+    // Catalogue and custom trips are referenced identically — one generator,
+    // no branch on isCustom.
+    const bookingReference = buildBookingReference(trip, bookingDate);
 
     // Create booking
     const booking = new Booking({
@@ -327,6 +338,18 @@ export const approveGuest = async (req, res) => {
 
     if (!mongoose.Types.ObjectId.isValid(guestId)) {
       return res.status(400).json({ message: "Invalid guest ID" });
+    }
+
+    // Nothing to approve until a passport has been uploaded — the same rule the
+    // passport approval screen enforces.
+    const existing = await Guest.findById(guestId).select("passport name");
+    if (!existing) {
+      return res.status(404).json({ message: "Guest not found" });
+    }
+    if (!existing.passport) {
+      return res.status(400).json({
+        message: `${existing.name || "This traveller"} has not uploaded a passport yet, so there is nothing to approve.`
+      });
     }
 
     // Update only the approval fields so unrelated legacy data on the guest

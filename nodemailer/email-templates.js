@@ -122,3 +122,80 @@ export const announcementTemplate = (userName, subject, message) => {
     </html>
   `;
 };
+
+// Sent when an admin rejects an uploaded passport. The admin's note is the
+// whole point of the email — the traveller cannot fix the problem without it,
+// so it is given its own panel rather than buried in a paragraph.
+export const passportRejectedTemplate = (customerName, guestName, reason, portalUrl) => {
+  const safe = (value) =>
+    String(value ?? "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+
+  return `
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>Passport needs to be re-uploaded</title>
+    </head>
+    <body style="margin:0;padding:0;background-color:#f2f2f2;font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;color:#473d34;">
+      <div style="max-width:600px;margin:0 auto;background-color:#ffffff;">
+
+        <div style="background-color:#256000;padding:24px 30px;">
+          <h1 style="margin:0;color:#ffffff;font-size:20px;font-weight:600;">
+            Action needed: passport re-upload
+          </h1>
+        </div>
+
+        <div style="padding:30px;">
+          <p style="margin:0 0 16px;font-size:15px;line-height:1.6;">
+            Hi ${safe(customerName)},
+          </p>
+
+          <p style="margin:0 0 20px;font-size:15px;line-height:1.6;">
+            We've reviewed the passport uploaded for
+            <strong>${safe(guestName)}</strong> and it can't be accepted as it is.
+            Here's what our team noted:
+          </p>
+
+          <div style="border-left:4px solid #f7741d;background-color:#fff2e8;padding:16px 18px;margin:0 0 24px;">
+            <p style="margin:0;font-size:15px;line-height:1.6;color:#473d34;white-space:pre-wrap;">${safe(reason)}</p>
+          </div>
+
+          <p style="margin:0 0 24px;font-size:15px;line-height:1.6;">
+            Please upload a new copy of the passport in your booking portal. This
+            replacement won't count against your usual one-time update limit.
+          </p>
+
+          ${
+            portalUrl
+              ? `<p style="margin:0 0 28px;">
+                   <a href="${safe(portalUrl)}"
+                      style="display:inline-block;background-color:#f7741d;color:#ffffff;text-decoration:none;padding:12px 26px;border-radius:6px;font-weight:600;font-size:15px;">
+                     Upload a new passport
+                   </a>
+                 </p>`
+              : ""
+          }
+
+          <p style="margin:0;font-size:14px;line-height:1.6;color:#5a4d42;">
+            If you think this is a mistake, or you're not sure what's needed,
+            just reply to this email and we'll help.
+          </p>
+        </div>
+
+        <div style="background-color:#dce3ea;padding:18px 30px;">
+          <p style="margin:0;font-size:12px;color:#5a666e;">
+            Adventure Safari Network
+          </p>
+        </div>
+
+      </div>
+    </body>
+    </html>
+  `;
+};

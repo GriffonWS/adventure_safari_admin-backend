@@ -11,6 +11,7 @@ import announcementRoutes from "./routes/announcementRoutes.js";
 import passportRoutes from "./routes/passport.routes.js";
 import inquiryRoutes from "./routes/inquiryRoutes.js";
 import colorSettingsRoutes from "./routes/colorSettingsRoutes.js";
+import tripService from "./services/trip.service.js";
 
 const app = express();
 
@@ -48,6 +49,36 @@ app.use("/api/passports", passportRoutes);
 app.use("/api/inquiries", inquiryRoutes);
 app.use("/api/settings/colors", colorSettingsRoutes);
 
+// Trips with an end date retire themselves the day after they finish, so the
+// list does not fill up with safaris that have already run. Trips with no end
+// date are untouched and are still deactivated by hand.
+//
+// The sweep runs on boot — which catches anything that ended while the server
+// was down — and then every six hours, so a trip is retired within a few hours
+// of midnight rather than only at the next restart.
+const TRIP_SWEEP_INTERVAL_MS = 6 * 60 * 60 * 1000;
+
+const sweepFinishedTrips = async () => {
+  try {
+    const retired = await tripService.deactivateFinishedTrips();
+    if (retired > 0) {
+      console.log(`Deactivated ${retired} trip(s) that have finished`);
+    }
+
+    // A month after it ended, a finished trip moves out of the working list.
+    const archived = await tripService.archiveFinishedTrips();
+    if (archived > 0) {
+      console.log(`Archived ${archived} trip(s) that finished over a month ago`);
+    }
+  } catch (error) {
+    // A failed sweep must never take the server down with it — the next run
+    // picks up whatever this one missed.
+    console.error("Error deactivating finished trips:", error);
+  }
+};
+
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
+  sweepFinishedTrips();
+  setInterval(sweepFinishedTrips, TRIP_SWEEP_INTERVAL_MS);
 });

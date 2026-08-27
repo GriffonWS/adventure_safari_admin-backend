@@ -1,15 +1,19 @@
 import Trip from "../models/Trip.js";
 import { normalizePricingTiers, derivePriceFromTiers } from "../utils/pricing.js";
+import { normalizeAssignedUserIds, resolveAssignedUserIds } from "../utils/assignment.js";
+import { parseTripDate, startOfToday, archiveCutoff } from "../utils/schedule.js";
 
 class TripService {
   // Get all trips
   async getAllTrips() {
-    return await Trip.find().sort({ createdAt: -1 });
+    return await Trip.find()
+      .populate("assignedUserIds", "name email")
+      .sort({ createdAt: -1 });
   }
 
   // Get single trip by ID
   async getTripById(tripId) {
-    const trip = await Trip.findById(tripId);
+    const trip = await Trip.findById(tripId).populate("assignedUserIds", "name email");
     if (!trip) {
       throw new Error("Trip not found");
     }
@@ -18,24 +22,42 @@ class TripService {
 
   // Create new trip
   async createTrip(tripData) {
-    const { name, destination, price, image, wetuLink, isActive, isCustom, assignedUserId, pricing } = tripData;
+    const { name, destination, price, image, wetuLink, isActive, isCustom, assignedUserId, assignedUserIds, pricing, startDate, endDate } = tripData;
+
+    const start = parseTripDate(startDate, "Start date") ?? null;
+    const end = parseTripDate(endDate, "End date") ?? null;
+    if (start && end && end < start) {
+      throw new Error("A trip cannot end before it starts");
+    }
+
+    // One custom trip can be sent to several customers, each of whom books it
+    // separately. The form may send the list, or a single id from before the
+    // list existed.
+    const assignedIds = normalizeAssignedUserIds(assignedUserIds, assignedUserId);
 
     // A trip is priced either as one flat per-person amount or as a list of
     // traveller types. When the list is given it is the source of truth and
     // `price` becomes the cheapest of them, so the catalogue still has a figure.
     const tiers = normalizePricingTiers(pricing);
     const headlinePrice = tiers.length ? derivePriceFromTiers(tiers) : price;
+    const hasPrice = Number(headlinePrice) > 0;
 
     // Validate required fields
-    if (!name || !destination || !headlinePrice || !image) {
+    if (!name || !destination || !image) {
+      throw new Error("Name, destination, and image are required");
+    }
+
+    // A custom trip may be saved before its quote is settled and priced later.
+    // A catalogue trip is on sale the moment it exists, so it needs a figure.
+    if (!hasPrice && !isCustom) {
       throw new Error("Name, destination, price, and image are required");
     }
 
     // A custom trip is built for one customer, who then books it themselves
     // with their own travel date and travellers.
     if (isCustom) {
-      if (!assignedUserId) {
-        throw new Error("A custom trip must be assigned to a customer");
+      if (assignedIds.length === 0) {
+        throw new Error("A custom trip must be assigned to at least one customer");
       }
       if (!wetuLink) {
         throw new Error("A custom trip must have a Wetu link");
@@ -45,12 +67,17 @@ class TripService {
     const trip = new Trip({
       name,
       destination,
-      price: headlinePrice,
+      price: hasPrice ? headlinePrice : null,
       pricing: tiers,
       image,
       wetuLink: wetuLink || "",
+      startDate: start,
+      endDate: end,
       isCustom: Boolean(isCustom),
-      assignedUserId: isCustom ? assignedUserId : null,
+      assignedUserIds: isCustom ? assignedIds : [],
+      // Mirrors the first customer so anything still reading the old single
+      // field keeps working.
+      assignedUserId: isCustom ? assignedIds[0] : null,
       isActive: isActive !== undefined ? isActive : true
     });
 
@@ -68,12 +95,42 @@ class TripService {
 
     // Apply the changes to the document and validate on save, which runs the
     // full schema against real values rather than the partial update.
-    // isCustom and assignedUserId are deliberately not editable here.
+    // isCustom is deliberately not editable here.
     const editableFields = ["name", "destination", "price", "image", "wetuLink", "isActive"];
     for (const field of editableFields) {
       if (updateData[field] !== undefined) {
         trip[field] = updateData[field];
       }
+    }
+
+    // Dates are cleared by sending an empty value, which puts the trip back to
+    // evergreen — it then stays active until deactivated by hand.
+    if (updateData.startDate !== undefined) {
+      trip.startDate = parseTripDate(updateData.startDate, "Start date");
+    }
+    if (updateData.endDate !== undefined) {
+      trip.endDate = parseTripDate(updateData.endDate, "End date");
+    }
+    if (trip.startDate && trip.endDate && trip.endDate < trip.startDate) {
+      throw new Error("A trip cannot end before it starts");
+    }
+
+    // The same trip can be sent to another couple later, so who it is assigned
+    // to stays editable. Removing a customer only takes the trip out of their
+    // list — any booking they already made stands on its own.
+    if (updateData.assignedUserIds !== undefined || updateData.assignedUserId !== undefined) {
+      if (!trip.isCustom) {
+        throw new Error("Only a custom trip can be assigned to customers");
+      }
+      const assignedIds = normalizeAssignedUserIds(
+        updateData.assignedUserIds,
+        updateData.assignedUserId
+      );
+      if (assignedIds.length === 0) {
+        throw new Error("A custom trip must be assigned to at least one customer");
+      }
+      trip.assignedUserIds = assignedIds;
+      trip.assignedUserId = assignedIds[0];
     }
 
     // Editing traveller types repoints the headline price at the cheapest one.
@@ -82,13 +139,46 @@ class TripService {
     if (updateData.pricing !== undefined) {
       const tiers = normalizePricingTiers(updateData.pricing);
       trip.pricing = tiers;
-      if (tiers.length) {
-        trip.price = derivePriceFromTiers(tiers);
-      }
+      // Clearing every traveller type puts the trip back to unpriced rather
+      // than leaving a stale headline figure behind. The schema refuses this
+      // for a catalogue trip, which must always carry a price.
+      trip.price = tiers.length ? derivePriceFromTiers(tiers) : null;
     }
 
     await trip.save();
     return trip;
+  }
+
+  // Retires every trip whose end date has passed. Runs on a timer, so a trip
+  // that finished while the server was down is still caught on the next boot.
+  //
+  // Only trips that are still active and actually carry an end date are
+  // touched: `$type: "date"` keeps trips with no date out of it entirely, and
+  // `$lt` against midnight today means a trip is retired the day after it ends,
+  // never on its final day.
+  async deactivateFinishedTrips(now = new Date()) {
+    const result = await Trip.updateMany(
+      {
+        isActive: true,
+        endDate: { $type: "date", $lt: startOfToday(now) },
+      },
+      { $set: { isActive: false } }
+    );
+    return result.modifiedCount || 0;
+  }
+
+  // Archives every trip that finished more than a month ago. Archiving is not
+  // deletion — bookings still point at these trips, so they are only moved out
+  // of the working list.
+  async archiveFinishedTrips(now = new Date()) {
+    const result = await Trip.updateMany(
+      {
+        isArchived: { $ne: true },
+        endDate: { $type: "date", $lte: archiveCutoff(now) },
+      },
+      { $set: { isArchived: true, isActive: false, archivedAt: new Date() } }
+    );
+    return result.modifiedCount || 0;
   }
 
   // Toggle trip active status
@@ -99,6 +189,12 @@ class TripService {
     }
 
     trip.isActive = !trip.isActive;
+    // Switching an archived trip back on takes it out of the archive too —
+    // otherwise it would read as active while still filed away.
+    if (trip.isActive && trip.isArchived) {
+      trip.isArchived = false;
+      trip.archivedAt = null;
+    }
     await trip.save();
     return trip;
   }

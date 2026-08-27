@@ -1,6 +1,7 @@
 import Booking from "../models/Booking.js";
 import Guest from "../models/Guest.js";
 import Admin from "../models/Admin.js";
+import { sendPassportRejectedEmail } from "../nodemailer/email.js";
 
 // Get all pending passport approvals
 export const getPendingPassports = async (req, res) => {
@@ -117,6 +118,19 @@ export const approvePassport = async (req, res) => {
       return res.status(401).json({ message: "Admin authentication required" });
     }
 
+    // There is nothing to approve until a passport has actually been uploaded.
+    // Approving an empty record would mark the traveller as document-verified
+    // with no document behind it.
+    const existing = await Guest.findById(guestId).select("passport name");
+    if (!existing) {
+      return res.status(404).json({ message: "Guest not found" });
+    }
+    if (!existing.passport) {
+      return res.status(400).json({
+        message: `${existing.name || "This traveller"} has not uploaded a passport yet, so there is nothing to approve.`
+      });
+    }
+
     const guest = await Guest.findByIdAndUpdate(
       guestId,
       {
@@ -176,8 +190,32 @@ export const rejectPassport = async (req, res) => {
       return res.status(404).json({ message: "Guest not found" });
     }
 
+    // The customer cannot act on a rejection they never see, so the admin's
+    // note is emailed to them. A mail failure is reported but does not undo the
+    // rejection — the decision stands and the portal already reflects it.
+    let emailed = false;
+    const customerEmail = guest.userId?.email;
+    if (customerEmail) {
+      const booking = await Booking.findOne({ guestIds: guest._id }).select("_id");
+      const portalUrl = booking && process.env.CLIENT_URL
+        ? `${process.env.CLIENT_URL}/dashboard/${booking._id}/passport-upload`
+        : null;
+
+      const result = await sendPassportRejectedEmail(
+        customerEmail,
+        guest.userId?.name || "there",
+        guest.name || "your traveller",
+        reason,
+        portalUrl
+      );
+      emailed = result.success;
+    }
+
     res.status(200).json({
-      message: "Passport rejected successfully",
+      message: emailed
+        ? "Passport rejected. The customer has been emailed your note."
+        : "Passport rejected, but the notification email could not be sent. Please contact the customer directly.",
+      emailed,
       guest
     });
   } catch (error) {
