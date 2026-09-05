@@ -7,6 +7,12 @@ import {
   toggleTripStatus,
   uploadTripImage
 } from "../controllers/trip.controller.js";
+import {
+  getInvitationsForTrip,
+  resendInvitation,
+  deleteInvitation,
+  sendTripInvitations
+} from "../controllers/invitation.controller.js";
 import adminAuth from "../middleware/auth.js";
 import { uploadSingleImage } from "../middleware/documentUpload.js";
 
@@ -32,5 +38,11 @@ router.put("/:id", adminAuth, updateTrip);
 
 // Toggle trip active status
 router.patch("/:id/toggle-status", adminAuth, toggleTripStatus);
+
+// Invitation routes
+router.get("/:tripId/invitations", adminAuth, getInvitationsForTrip);
+router.post("/invitations/:invitationId/resend", adminAuth, resendInvitation);
+router.delete("/invitations/:invitationId", adminAuth, deleteInvitation);
+router.post("/:tripId/send-invitations", adminAuth, sendTripInvitations);
 
 export default router;

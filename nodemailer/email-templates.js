@@ -199,3 +199,159 @@ export const passportRejectedTemplate = (customerName, guestName, reason, portal
     </html>
   `;
 };
+
+// Invitation email for unregistered customers
+export const tripInvitationTemplate = (tripName, registrationUrl, wetuLink) => {
+  const safe = (value) =>
+    String(value ?? "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+
+  return `
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>You're invited to a custom trip!</title>
+      <style>
+        body {
+          font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+          line-height: 1.6;
+          color: #333;
+          background-color: #f4f4f4;
+          margin: 0;
+          padding: 20px;
+        }
+        .container {
+          max-width: 600px;
+          margin: 0 auto;
+          background-color: #ffffff;
+          border-radius: 8px;
+          overflow: hidden;
+        }
+        .header {
+          background-color: #2d6a3e;
+          color: white;
+          padding: 30px;
+          text-align: center;
+        }
+        .logo {
+          font-size: 28px;
+          margin-bottom: 10px;
+        }
+        .header h1 {
+          margin: 0;
+          font-size: 22px;
+          font-weight: 600;
+        }
+        .content {
+          padding: 30px;
+        }
+        .greeting {
+          font-size: 16px;
+          color: #333;
+          margin-bottom: 15px;
+        }
+        .trip-info {
+          font-size: 15px;
+          color: #555;
+          margin: 15px 0;
+          line-height: 1.6;
+        }
+        .cta-section {
+          margin: 25px 0;
+          text-align: center;
+        }
+        .cta-button {
+          display: inline-block;
+          background-color: #2d6a3e;
+          color: white !important;
+          text-decoration: none !important;
+          padding: 12px 30px;
+          border-radius: 6px;
+          font-weight: 600;
+          font-size: 15px;
+        }
+        .note-box {
+          background-color: #f0f8f4;
+          border-left: 4px solid #2d6a3e;
+          padding: 15px;
+          margin: 20px 0;
+          font-size: 14px;
+          color: #333;
+          line-height: 1.6;
+        }
+        .footer {
+          background-color: #fafafa;
+          padding: 20px 30px;
+          border-top: 1px solid #e6e1db;
+          font-size: 12px;
+          color: #666;
+          text-align: center;
+        }
+        .footer p {
+          margin: 5px 0;
+        }
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <div class="header">
+          <div class="logo">🦁</div>
+          <h1>You're invited to an exclusive trip!</h1>
+        </div>
+
+        <div class="content">
+          <div class="greeting">
+            Hello,
+          </div>
+
+          <div class="trip-info">
+            You've been invited to book a custom safari trip: <strong>${safe(tripName)}</strong>
+          </div>
+
+          <div class="trip-info">
+            This exclusive trip has been created specifically for you. Register on our platform to view the full itinerary and proceed with your booking.
+          </div>
+
+          ${
+            wetuLink
+              ? `<div class="trip-info">
+                  <strong>📋 Itinerary:</strong> <a href="${safe(wetuLink)}" style="color: #2d6a3e; text-decoration: none; font-weight: 500;">${safe(wetuLink)}</a>
+                </div>`
+              : ""
+          }
+
+          <div class="cta-section">
+            <a href="${safe(registrationUrl)}" class="cta-button" style="color: white !important; text-decoration: none !important; display: inline-block; background-color: #2d6a3e; padding: 12px 30px; border-radius: 6px; font-weight: 600; font-size: 15px;">
+              Register & View Trip
+            </a>
+          </div>
+
+          <div class="note-box">
+            <strong>⏰ Expires in 30 days</strong> — Register now to get immediate access to this trip and start your booking.
+          </div>
+
+          <div class="trip-info">
+            Questions? Contact our team for any assistance with registration or trip details.
+          </div>
+
+          <div class="trip-info">
+            <strong>Can't click the link?</strong><br>
+            Copy and paste this URL: <span style="word-break: break-all; color: #555;">${safe(registrationUrl)}</span>
+          </div>
+        </div>
+
+        <div class="footer">
+          <p><strong>Adventure Safari</strong></p>
+          <p>Your Gateway to Wild Adventures</p>
+          <p style="margin-top: 10px;">This is an invitation email. If sent in error, you can ignore it.</p>
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
+};

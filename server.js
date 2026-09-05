@@ -34,7 +34,10 @@ app.options("*", cors(corsOptions)); // Handle preflight requests explicitly
 app.use(express.json());
 
 const PORT = process.env.PORT || 5000;
-dbConnect();
+dbConnect().catch(err => {
+  console.error("Failed to connect to MongoDB:", err);
+  process.exit(1);
+});
 
 app.get("/", (req, res) => {
   res.send("Welcome to the Adventure_Safari_Admin_Backend");

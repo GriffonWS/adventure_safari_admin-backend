@@ -1,5 +1,5 @@
 import createTransporter from './config.js';
-import { announcementTemplate, passportRejectedTemplate } from './email-templates.js';
+import { announcementTemplate, passportRejectedTemplate, tripInvitationTemplate } from './email-templates.js';
 
 // Send announcement email to a single user
 export const sendAnnouncementEmail = async (userEmail, userName, subject, message) => {
@@ -85,4 +85,49 @@ export const sendPassportRejectedEmail = async (customerEmail, customerName, gue
     console.error(`Error sending passport rejection to ${customerEmail}:`, error);
     return { success: false, error: error.message };
   }
+};
+
+// Send invitation email for custom trip
+export const sendTripInvitationEmail = async (email, tripName, invitationToken, wetuLink) => {
+  try {
+    const transporter = createTransporter();
+    const registrationUrl = `${process.env.CLIENT_URL || 'http://localhost:3000'}/register?invitation=${invitationToken}`;
+
+    const mailOptions = {
+      from: `"Adventure Safari" <${process.env.EMAIL_USER}>`,
+      to: email,
+      subject: `You're invited to an exclusive safari trip: ${tripName}`,
+      html: tripInvitationTemplate(tripName, registrationUrl, wetuLink),
+    };
+
+    const info = await transporter.sendMail(mailOptions);
+    console.log(`Trip invitation sent to ${email}: ${info.messageId}`);
+    return { success: true, messageId: info.messageId };
+  } catch (error) {
+    console.error(`Error sending trip invitation to ${email}:`, error);
+    return { success: false, error: error.message };
+  }
+};
+
+// Send bulk invitations
+export const sendBulkTripInvitations = async (invitations, tripName, wetuLink) => {
+  const results = {
+    total: invitations.length,
+    successful: 0,
+    failed: 0,
+    errors: []
+  };
+
+  for (const inv of invitations) {
+    const result = await sendTripInvitationEmail(inv.email, tripName, inv.token, wetuLink);
+    if (result.success) {
+      results.successful++;
+    } else {
+      results.failed++;
+      results.errors.push({ email: inv.email, error: result.error });
+    }
+    await new Promise(resolve => setTimeout(resolve, 100));
+  }
+
+  return results;
 };

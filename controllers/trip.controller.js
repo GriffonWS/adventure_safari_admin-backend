@@ -26,7 +26,11 @@ export const getTripById = async (req, res) => {
 // Create new trip
 export const createTrip = async (req, res) => {
   try {
-    const trip = await tripService.createTrip(req.body);
+    const tripData = {
+      ...req.body,
+      invitedBy: req.user._id
+    };
+    const trip = await tripService.createTrip(tripData);
     res.status(201).json({
       message: "Trip created successfully",
       trip

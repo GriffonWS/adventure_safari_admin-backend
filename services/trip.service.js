@@ -2,6 +2,8 @@ import Trip from "../models/Trip.js";
 import { normalizePricingTiers, derivePriceFromTiers } from "../utils/pricing.js";
 import { normalizeAssignedUserIds, resolveAssignedUserIds } from "../utils/assignment.js";
 import { parseTripDate, startOfToday, archiveCutoff } from "../utils/schedule.js";
+import invitationService from "./invitation.service.js";
+import { sendBulkTripInvitations } from "../nodemailer/email.js";
 
 class TripService {
   // Get all trips
@@ -22,7 +24,7 @@ class TripService {
 
   // Create new trip
   async createTrip(tripData) {
-    const { name, destination, price, image, wetuLink, isActive, isCustom, assignedUserId, assignedUserIds, pricing, startDate, endDate } = tripData;
+    const { name, destination, price, image, wetuLink, isActive, isCustom, assignedUserId, assignedUserIds, invitedEmails, pricing, startDate, endDate, invitedBy } = tripData;
 
     const start = parseTripDate(startDate, "Start date") ?? null;
     const end = parseTripDate(endDate, "End date") ?? null;
@@ -30,10 +32,9 @@ class TripService {
       throw new Error("A trip cannot end before it starts");
     }
 
-    // One custom trip can be sent to several customers, each of whom books it
-    // separately. The form may send the list, or a single id from before the
-    // list existed.
+    // Merge registered users and invited emails
     const assignedIds = normalizeAssignedUserIds(assignedUserIds, assignedUserId);
+    const allEmails = invitedEmails ? invitedEmails.filter(e => e.trim()) : [];
 
     // A trip is priced either as one flat per-person amount or as a list of
     // traveller types. When the list is given it is the source of truth and
@@ -54,10 +55,9 @@ class TripService {
     }
 
     // A custom trip is built for one customer, who then books it themselves
-    // with their own travel date and travellers.
     if (isCustom) {
-      if (assignedIds.length === 0) {
-        throw new Error("A custom trip must be assigned to at least one customer");
+      if (assignedIds.length === 0 && allEmails.length === 0) {
+        throw new Error("A custom trip must be assigned to at least one customer or email");
       }
       if (!wetuLink) {
         throw new Error("A custom trip must have a Wetu link");
@@ -82,6 +82,23 @@ class TripService {
     });
 
     await trip.save();
+
+    if (isCustom && allEmails.length > 0 && invitedBy) {
+      const invitationResults = await invitationService.createInvitations(
+        allEmails,
+        trip._id,
+        name,
+        invitedBy
+      );
+
+      // Send emails for newly invited addresses
+      if (invitationResults.invitedEmails.length > 0) {
+        await sendBulkTripInvitations(invitationResults.invitedEmails, name, wetuLink);
+      }
+
+      trip.invitationResults = invitationResults;
+    }
+
     return trip;
   }
 
