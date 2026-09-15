@@ -209,6 +209,12 @@ export const tripInvitationTemplate = (tripName, registrationUrl, wetuLink) => {
       .replace(/>/g, "&gt;")
       .replace(/"/g, "&quot;");
 
+  // The itinerary is shown as a button reading "Itinerary", never as the bare
+  // Wetu URL — that address tells the customer nothing and reads as spam.
+  const itineraryUrl = /^https?:\/\//i.test(String(wetuLink ?? "").trim())
+    ? String(wetuLink).trim()
+    : "";
+
   return `
     <!DOCTYPE html>
     <html lang="en">
@@ -275,6 +281,17 @@ export const tripInvitationTemplate = (tripName, registrationUrl, wetuLink) => {
           font-weight: 600;
           font-size: 15px;
         }
+        .itinerary-button {
+          display: inline-block;
+          background-color: #f0f8f4;
+          color: #2d6a3e !important;
+          text-decoration: none !important;
+          border: 2px solid #2d6a3e;
+          padding: 12px 30px;
+          border-radius: 6px;
+          font-weight: 600;
+          font-size: 15px;
+        }
         .note-box {
           background-color: #f0f8f4;
           border-left: 4px solid #2d6a3e;
@@ -318,9 +335,11 @@ export const tripInvitationTemplate = (tripName, registrationUrl, wetuLink) => {
           </div>
 
           ${
-            wetuLink
-              ? `<div class="trip-info">
-                  <strong>📋 Itinerary:</strong> <a href="${safe(wetuLink)}" style="color: #2d6a3e; text-decoration: none; font-weight: 500;">${safe(wetuLink)}</a>
+            itineraryUrl
+              ? `<div class="cta-section">
+                  <a href="${safe(itineraryUrl)}" class="itinerary-button" style="color: #2d6a3e !important; text-decoration: none !important; display: inline-block; background-color: #f0f8f4; border: 2px solid #2d6a3e; padding: 12px 30px; border-radius: 6px; font-weight: 600; font-size: 15px;">
+                    📋 Itinerary
+                  </a>
                 </div>`
               : ""
           }
