@@ -1,4 +1,5 @@
 import createTransporter from './config.js';
+import clientUrl from '../config/clientUrl.js';
 import { announcementTemplate, passportRejectedTemplate, tripInvitationTemplate } from './email-templates.js';
 
 // Send announcement email to a single user
@@ -91,7 +92,7 @@ export const sendPassportRejectedEmail = async (customerEmail, customerName, gue
 export const sendTripInvitationEmail = async (email, tripName, invitationToken, wetuLink) => {
   try {
     const transporter = createTransporter();
-    const registrationUrl = `${process.env.CLIENT_URL || 'http://localhost:3000'}/register?invitation=${invitationToken}`;
+    const registrationUrl = `${clientUrl}/register?invitation=${invitationToken}`;
 
     const mailOptions = {
       from: `"Adventure Safari" <${process.env.EMAIL_USER}>`,

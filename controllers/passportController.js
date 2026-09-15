@@ -2,6 +2,7 @@ import Booking from "../models/Booking.js";
 import Guest from "../models/Guest.js";
 import Admin from "../models/Admin.js";
 import { sendPassportRejectedEmail } from "../nodemailer/email.js";
+import clientUrl from "../config/clientUrl.js";
 
 // Get all pending passport approvals
 export const getPendingPassports = async (req, res) => {
@@ -197,8 +198,8 @@ export const rejectPassport = async (req, res) => {
     const customerEmail = guest.userId?.email;
     if (customerEmail) {
       const booking = await Booking.findOne({ guestIds: guest._id }).select("_id");
-      const portalUrl = booking && process.env.CLIENT_URL
-        ? `${process.env.CLIENT_URL}/dashboard/${booking._id}/passport-upload`
+      const portalUrl = booking
+        ? `${clientUrl}/dashboard/${booking._id}/passport-upload`
         : null;
 
       const result = await sendPassportRejectedEmail(
