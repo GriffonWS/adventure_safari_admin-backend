@@ -1,7 +1,8 @@
 import Trip from "../models/Trip.js";
 import { normalizePricingTiers, derivePriceFromTiers } from "../utils/pricing.js";
 import { normalizeAssignedUserIds, resolveAssignedUserIds } from "../utils/assignment.js";
-import { parseTripDate, startOfToday, archiveCutoff } from "../utils/schedule.js";
+import { startOfToday, archiveCutoff } from "../utils/schedule.js";
+import { buildSchedule } from "../utils/departures.js";
 import invitationService from "./invitation.service.js";
 import { sendBulkTripInvitations } from "../nodemailer/email.js";
 
@@ -24,13 +25,9 @@ class TripService {
 
   // Create new trip
   async createTrip(tripData) {
-    const { name, destination, price, image, wetuLink, isActive, isCustom, assignedUserId, assignedUserIds, invitedEmails, pricing, startDate, endDate, invitedBy } = tripData;
+    const { name, destination, price, image, wetuLink, isActive, isCustom, assignedUserId, assignedUserIds, invitedEmails, pricing, departures, startDate, endDate, invitedBy } = tripData;
 
-    const start = parseTripDate(startDate, "Start date") ?? null;
-    const end = parseTripDate(endDate, "End date") ?? null;
-    if (start && end && end < start) {
-      throw new Error("A trip cannot end before it starts");
-    }
+    const schedule = buildSchedule({ departures, startDate, endDate });
 
     // Merge registered users and invited emails
     const assignedIds = normalizeAssignedUserIds(assignedUserIds, assignedUserId);
@@ -71,8 +68,9 @@ class TripService {
       pricing: tiers,
       image,
       wetuLink: wetuLink || "",
-      startDate: start,
-      endDate: end,
+      departures: schedule.departures,
+      startDate: schedule.startDate,
+      endDate: schedule.endDate,
       isCustom: Boolean(isCustom),
       assignedUserIds: isCustom ? assignedIds : [],
       // Mirrors the first customer so anything still reading the old single
@@ -120,16 +118,28 @@ class TripService {
       }
     }
 
-    // Dates are cleared by sending an empty value, which puts the trip back to
-    // evergreen — it then stays active until deactivated by hand.
-    if (updateData.startDate !== undefined) {
-      trip.startDate = parseTripDate(updateData.startDate, "Start date");
-    }
-    if (updateData.endDate !== undefined) {
-      trip.endDate = parseTripDate(updateData.endDate, "End date");
-    }
-    if (trip.startDate && trip.endDate && trip.endDate < trip.startDate) {
-      throw new Error("A trip cannot end before it starts");
+    // Dates are cleared by sending an empty list, or an empty value for the
+    // legacy pair, which puts the trip back to evergreen — it then stays active
+    // until deactivated by hand.
+    //
+    // A departure that survives an edit keeps its id, so bookings already made
+    // against it still resolve to the dates they were sold. Removing one does
+    // not touch those bookings; they carry their own copy of the dates.
+    if (
+      updateData.departures !== undefined ||
+      updateData.startDate !== undefined ||
+      updateData.endDate !== undefined
+    ) {
+      const schedule = buildSchedule({
+        departures: updateData.departures,
+        // The legacy pair is only half-submitted on a partial update, so what
+        // the form left out falls back to what the trip already has.
+        startDate: updateData.startDate !== undefined ? updateData.startDate : trip.startDate,
+        endDate: updateData.endDate !== undefined ? updateData.endDate : trip.endDate,
+      });
+      trip.departures = schedule.departures;
+      trip.startDate = schedule.startDate;
+      trip.endDate = schedule.endDate;
     }
 
     // The same trip can be sent to another couple later, so who it is assigned
