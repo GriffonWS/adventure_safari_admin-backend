@@ -7,8 +7,8 @@ class InvitationService {
     // Check if user is already registered
     const existingUser = await User.findOne({ email: email.toLowerCase() });
     if (existingUser) {
-      // User already registered, no need to send invitation
-      return null;
+      // No invitation needed — the caller assigns them to the trip directly.
+      return { alreadyRegistered: true, email: existingUser.email, userId: existingUser._id };
     }
 
     // Check if invitation already exists and is still pending
@@ -56,10 +56,12 @@ class InvitationService {
         invitedBy
       );
 
-      if (invitation === null) {
-        // User already registered
-        results.registeredEmails.push(email);
-      } else if (invitation._id) {
+      if (invitation?.alreadyRegistered) {
+        results.registeredEmails.push({
+          email: invitation.email,
+          userId: invitation.userId,
+        });
+      } else if (invitation?._id) {
         // New invitation created
         results.invitedEmails.push({
           email: invitation.email,

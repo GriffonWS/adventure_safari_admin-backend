@@ -18,6 +18,19 @@ const guestPricingSchema = new mongoose.Schema(
   { _id: false }
 );
 
+// Which set of dates this booking is for, frozen when it was made. Written by
+// the client backend; mirrored here so the admin reads the dates that were
+// actually sold rather than whatever the trip carries now.
+const departureSnapshotSchema = new mongoose.Schema(
+  {
+    departureId: { type: mongoose.Schema.Types.ObjectId, default: null },
+    name: { type: String, required: true, trim: true },
+    startDate: { type: Date, required: true },
+    endDate: { type: Date, required: true },
+  },
+  { _id: false }
+);
+
 // Booking Schema
 const bookingSchema = new mongoose.Schema(
   {
@@ -38,6 +51,11 @@ const bookingSchema = new mongoose.Schema(
     bookingDate: {
       type: Date,
       default: Date.now,
+    },
+    // Null for an evergreen trip and for bookings made before departures existed.
+    departure: {
+      type: departureSnapshotSchema,
+      default: null,
     },
     travelKey: {
       type: String,

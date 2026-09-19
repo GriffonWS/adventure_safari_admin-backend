@@ -31,9 +31,12 @@ export const createTrip = async (req, res) => {
       invitedBy: req.user._id
     };
     const trip = await tripService.createTrip(tripData);
+    // Not a schema path, so it does not survive serialising the trip — it is
+    // returned alongside it instead.
     res.status(201).json({
       message: "Trip created successfully",
-      trip
+      trip,
+      invitationResults: trip.invitationResults || null
     });
   } catch (error) {
     console.error("Error creating trip:", error);

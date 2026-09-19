@@ -3,6 +3,10 @@ import { normalizePricingTiers, derivePriceFromTiers } from "../utils/pricing.js
 import { normalizeAssignedUserIds, resolveAssignedUserIds } from "../utils/assignment.js";
 import { startOfToday, archiveCutoff } from "../utils/schedule.js";
 import { buildSchedule } from "../utils/departures.js";
+import {
+  ensureCustomTripBookings,
+  removeEmptyCustomTripBooking,
+} from "../utils/customTripBooking.js";
 import invitationService from "./invitation.service.js";
 import { sendBulkTripInvitations } from "../nodemailer/email.js";
 
@@ -28,6 +32,12 @@ class TripService {
     const { name, destination, price, image, wetuLink, isActive, isCustom, assignedUserId, assignedUserIds, invitedEmails, pricing, departures, startDate, endDate, invitedBy } = tripData;
 
     const schedule = buildSchedule({ departures, startDate, endDate });
+
+    // A custom trip is built for one party travelling together, so there is
+    // nothing for them to choose between.
+    if (isCustom && schedule.departures.length > 1) {
+      throw new Error("A custom trip runs once, so it takes a single set of dates");
+    }
 
     // Merge registered users and invited emails
     const assignedIds = normalizeAssignedUserIds(assignedUserIds, assignedUserId);
@@ -94,7 +104,26 @@ class TripService {
         await sendBulkTripInvitations(invitationResults.invitedEmails, name, wetuLink);
       }
 
+      // An invited address that already has an account gets no invitation, so
+      // it is put straight onto the trip — otherwise the trip stays invisible
+      // to the one person the admin meant to send it to.
+      const registeredIds = invitationResults.registeredEmails
+        .map((entry) => entry?.userId)
+        .filter(Boolean)
+        .map(String);
+
+      if (registeredIds.length > 0) {
+        const merged = normalizeAssignedUserIds([...assignedIds, ...registeredIds]);
+        trip.assignedUserIds = merged;
+        trip.assignedUserId = merged[0];
+        await trip.save();
+      }
+
       trip.invitationResults = invitationResults;
+    }
+
+    if (isCustom) {
+      await ensureCustomTripBookings(trip, resolveAssignedUserIds(trip));
     }
 
     return trip;
@@ -137,6 +166,9 @@ class TripService {
         startDate: updateData.startDate !== undefined ? updateData.startDate : trip.startDate,
         endDate: updateData.endDate !== undefined ? updateData.endDate : trip.endDate,
       });
+      if (trip.isCustom && schedule.departures.length > 1) {
+        throw new Error("A custom trip runs once, so it takes a single set of dates");
+      }
       trip.departures = schedule.departures;
       trip.startDate = schedule.startDate;
       trip.endDate = schedule.endDate;
@@ -145,6 +177,9 @@ class TripService {
     // The same trip can be sent to another couple later, so who it is assigned
     // to stays editable. Removing a customer only takes the trip out of their
     // list — any booking they already made stands on its own.
+    let addedUserIds = [];
+    let removedUserIds = [];
+
     if (updateData.assignedUserIds !== undefined || updateData.assignedUserId !== undefined) {
       if (!trip.isCustom) {
         throw new Error("Only a custom trip can be assigned to customers");
@@ -156,6 +191,11 @@ class TripService {
       if (assignedIds.length === 0) {
         throw new Error("A custom trip must be assigned to at least one customer");
       }
+      // Read before the overwrite, so the diff below knows who is new.
+      const previousIds = resolveAssignedUserIds(trip);
+      addedUserIds = assignedIds.filter((id) => !previousIds.includes(id));
+      removedUserIds = previousIds.filter((id) => !assignedIds.includes(id));
+
       trip.assignedUserIds = assignedIds;
       trip.assignedUserId = assignedIds[0];
     }
@@ -173,6 +213,15 @@ class TripService {
     }
 
     await trip.save();
+
+    if (addedUserIds.length > 0) {
+      await ensureCustomTripBookings(trip, addedUserIds);
+    }
+
+    for (const userId of removedUserIds) {
+      await removeEmptyCustomTripBooking(trip._id, userId);
+    }
+
     return trip;
   }
 
