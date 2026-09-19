@@ -48,10 +48,14 @@ export const createTrip = async (req, res) => {
 export const updateTrip = async (req, res) => {
   try {
     const { id } = req.params;
-    const trip = await tripService.updateTrip(id, req.body);
+    const trip = await tripService.updateTrip(id, {
+      ...req.body,
+      invitedBy: req.user._id
+    });
     res.status(200).json({
       message: "Trip updated successfully",
-      trip
+      trip,
+      invitationResults: trip.invitationResults || null
     });
   } catch (error) {
     console.error("Error updating trip:", error);

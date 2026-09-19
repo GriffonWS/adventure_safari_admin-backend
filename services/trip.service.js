@@ -177,6 +177,10 @@ class TripService {
     // The same trip can be sent to another couple later, so who it is assigned
     // to stays editable. Removing a customer only takes the trip out of their
     // list — any booking they already made stands on its own.
+    const newEmails = Array.isArray(updateData.invitedEmails)
+      ? updateData.invitedEmails.map((email) => String(email || "").trim()).filter(Boolean)
+      : [];
+
     let addedUserIds = [];
     let removedUserIds = [];
 
@@ -188,16 +192,23 @@ class TripService {
         updateData.assignedUserIds,
         updateData.assignedUserId
       );
-      if (assignedIds.length === 0) {
-        throw new Error("A custom trip must be assigned to at least one customer");
+
+      // A custom trip can go entirely to people who have no account yet, so an
+      // empty customer list is only wrong when nothing is invited either.
+      if (assignedIds.length === 0 && newEmails.length === 0) {
+        const invitations = await invitationService.getInvitationsForTrip(trip._id);
+        if (invitations.length === 0) {
+          throw new Error("A custom trip must go to at least one customer or email address");
+        }
       }
+
       // Read before the overwrite, so the diff below knows who is new.
       const previousIds = resolveAssignedUserIds(trip);
       addedUserIds = assignedIds.filter((id) => !previousIds.includes(id));
       removedUserIds = previousIds.filter((id) => !assignedIds.includes(id));
 
       trip.assignedUserIds = assignedIds;
-      trip.assignedUserId = assignedIds[0];
+      trip.assignedUserId = assignedIds[0] || null;
     }
 
     // Editing traveller types repoints the headline price at the cheapest one.
@@ -213,6 +224,40 @@ class TripService {
     }
 
     await trip.save();
+
+    // The same trip can be sent to someone new later, so invitations are not
+    // only a create-time thing.
+    if (trip.isCustom && newEmails.length > 0 && updateData.invitedBy) {
+      const invitationResults = await invitationService.createInvitations(
+        newEmails,
+        trip._id,
+        trip.name,
+        updateData.invitedBy
+      );
+
+      if (invitationResults.invitedEmails.length > 0) {
+        await sendBulkTripInvitations(invitationResults.invitedEmails, trip.name, trip.wetuLink);
+      }
+
+      const registeredIds = invitationResults.registeredEmails
+        .map((entry) => entry?.userId)
+        .filter(Boolean)
+        .map(String);
+
+      if (registeredIds.length > 0) {
+        const previousIds = resolveAssignedUserIds(trip);
+        const merged = normalizeAssignedUserIds([...previousIds, ...registeredIds]);
+        trip.assignedUserIds = merged;
+        trip.assignedUserId = merged[0];
+        await trip.save();
+        addedUserIds = [
+          ...addedUserIds,
+          ...registeredIds.filter((id) => !previousIds.includes(id)),
+        ];
+      }
+
+      trip.invitationResults = invitationResults;
+    }
 
     if (addedUserIds.length > 0) {
       await ensureCustomTripBookings(trip, addedUserIds);
