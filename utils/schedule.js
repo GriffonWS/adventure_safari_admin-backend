@@ -66,37 +66,21 @@ export function parseTripDate(value, field) {
   ));
 }
 
-// How long after a trip ends before it is archived.
-export const ARCHIVE_AFTER_MONTHS = 1;
-
-// Calendar-correct month arithmetic. Plain setMonth() rolls 31 January forward
-// to 3 March; clamping to the last day of the target month gives 28 February,
-// which is what "a month later" means to a person.
-export function addMonths(date, months) {
-  // Worked in UTC throughout, for the same reason as startOfToday above.
-  const source = new Date(date);
-  const year = source.getUTCFullYear();
-  const month = source.getUTCMonth();
-  const dayOfMonth = source.getUTCDate();
-  const lastDayOfTarget = new Date(Date.UTC(year, month + months + 1, 0)).getUTCDate();
-  return new Date(Date.UTC(year, month + months, Math.min(dayOfMonth, lastDayOfTarget)));
-}
-
-// The date a trip drops into the archive: one month after it ends.
+// A completed trip is archived at the end of the month it ended in, but never
+// before it has become inactive (the day after it ends):
+//   ends Jan 1  -> archived Jan 31
+//   ends Jan 30 -> inactive Jan 31, archived Jan 31
+//   ends Jan 31 -> inactive Feb 1, archived Feb 1
 export function archiveOn(trip) {
   if (!trip?.endDate) return null;
-  // addMonths already returns UTC midnight, so there is nothing to flatten.
-  return addMonths(new Date(trip.endDate), ARCHIVE_AFTER_MONTHS);
+  const end = new Date(trip.endDate);
+  const lastDayOfMonth = new Date(Date.UTC(end.getUTCFullYear(), end.getUTCMonth() + 1, 0));
+  const dayAfterEnd = new Date(Date.UTC(end.getUTCFullYear(), end.getUTCMonth(), end.getUTCDate() + 1));
+  return lastDayOfMonth > dayAfterEnd ? lastDayOfMonth : dayAfterEnd;
 }
 
-// True once that date has arrived. A trip with no end date never archives on
-// its own, the same as it never deactivates on its own.
+// A trip with no end date never archives on its own.
 export function shouldArchive(trip, now = new Date()) {
   const on = archiveOn(trip);
   return on ? startOfToday(now) >= on : false;
-}
-
-// Trips ending on or before this date are due to be archived today.
-export function archiveCutoff(now = new Date()) {
-  return addMonths(startOfToday(now), -ARCHIVE_AFTER_MONTHS);
 }

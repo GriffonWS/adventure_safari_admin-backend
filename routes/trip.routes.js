@@ -4,7 +4,9 @@ import {
   getTripById,
   createTrip,
   updateTrip,
-  toggleTripStatus,
+  voidTrip,
+  archiveTrip,
+  reactivateTrip,
   uploadTripImage
 } from "../controllers/trip.controller.js";
 import {
@@ -33,11 +35,11 @@ router.post("/", adminAuth, createTrip);
 // Update trip
 router.put("/:id", adminAuth, updateTrip);
 
-// Trips are never deleted — they are deactivated with toggle-status below,
-// so bookings that reference a trip always keep a valid trip.
-
-// Toggle trip active status
-router.patch("/:id/toggle-status", adminAuth, toggleTripStatus);
+// Trips are never deleted, so bookings always keep a valid trip. Status
+// changes go through these instead.
+router.post("/:id/void", adminAuth, voidTrip);
+router.post("/:id/archive", adminAuth, archiveTrip);
+router.post("/:id/reactivate", adminAuth, reactivateTrip);
 
 // Invitation routes
 router.get("/:tripId/invitations", adminAuth, getInvitationsForTrip);

@@ -1,7 +1,7 @@
 import Trip from "../models/Trip.js";
 import { normalizePricingTiers, derivePriceFromTiers } from "../utils/pricing.js";
 import { normalizeAssignedUserIds, resolveAssignedUserIds } from "../utils/assignment.js";
-import { startOfToday, archiveCutoff } from "../utils/schedule.js";
+import { startOfToday, shouldArchive } from "../utils/schedule.js";
 import { buildSchedule } from "../utils/departures.js";
 import {
   ensureCustomTripBookings,
@@ -29,7 +29,7 @@ class TripService {
 
   // Create new trip
   async createTrip(tripData) {
-    const { name, destination, price, image, wetuLink, isActive, isCustom, assignedUserId, assignedUserIds, invitedEmails, pricing, departures, startDate, endDate, invitedBy } = tripData;
+    const { name, destination, price, image, wetuLink, isCustom, assignedUserId, assignedUserIds, invitedEmails, pricing, departures, startDate, endDate, invitedBy } = tripData;
 
     const schedule = buildSchedule({ departures, startDate, endDate });
 
@@ -86,7 +86,7 @@ class TripService {
       // Mirrors the first customer so anything still reading the old single
       // field keeps working.
       assignedUserId: isCustom ? assignedIds[0] : null,
-      isActive: isActive !== undefined ? isActive : true
+      status: "active"
     });
 
     await trip.save();
@@ -139,8 +139,9 @@ class TripService {
 
     // Apply the changes to the document and validate on save, which runs the
     // full schema against real values rather than the partial update.
-    // isCustom is deliberately not editable here.
-    const editableFields = ["name", "destination", "price", "image", "wetuLink", "isActive"];
+    // isCustom is deliberately not editable here, and status only changes
+    // through voidTrip / archiveTrip / reactivateTrip.
+    const editableFields = ["name", "destination", "price", "image", "wetuLink"];
     for (const field of editableFields) {
       if (updateData[field] !== undefined) {
         trip[field] = updateData[field];
@@ -270,54 +271,141 @@ class TripService {
     return trip;
   }
 
-  // Retires every trip whose end date has passed. Runs on a timer, so a trip
-  // that finished while the server was down is still caught on the next boot.
-  //
-  // Only trips that are still active and actually carry an end date are
-  // touched: `$type: "date"` keeps trips with no date out of it entirely, and
-  // `$lt` against midnight today means a trip is retired the day after it ends,
-  // never on its final day.
+  // Trips saved before `status` existed only carry isActive.
+  async backfillTripStatus() {
+    const [active, inactive] = await Promise.all([
+      Trip.updateMany({ status: { $exists: false }, isActive: { $ne: false } }, { $set: { status: "active" } }),
+      Trip.updateMany({ status: { $exists: false }, isActive: false }, { $set: { status: "inactive" } }),
+    ]);
+    return (active.modifiedCount || 0) + (inactive.modifiedCount || 0);
+  }
+
+  // Active trips become inactive the day after they end, never on the final day.
   async deactivateFinishedTrips(now = new Date()) {
     const result = await Trip.updateMany(
       {
-        isActive: true,
+        status: "active",
         endDate: { $type: "date", $lt: startOfToday(now) },
       },
-      { $set: { isActive: false } }
-    );
-    return result.modifiedCount || 0;
-  }
-
-  // Archives every trip that finished more than a month ago. Archiving is not
-  // deletion — bookings still point at these trips, so they are only moved out
-  // of the working list.
-  async archiveFinishedTrips(now = new Date()) {
-    const result = await Trip.updateMany(
       {
-        isArchived: { $ne: true },
-        endDate: { $type: "date", $lte: archiveCutoff(now) },
-      },
-      { $set: { isArchived: true, isActive: false, archivedAt: new Date() } }
+        $set: { status: "inactive", isActive: false },
+        $push: { statusHistory: { action: "completed", from: "active", to: "inactive", at: now } },
+      }
     );
     return result.modifiedCount || 0;
   }
 
-  // Toggle trip active status
-  async toggleTripStatus(tripId) {
-    const trip = await Trip.findById(tripId);
-    if (!trip) {
-      throw new Error("Trip not found");
+  // Inactive trips archive at the end of the month they ended in (see archiveOn).
+  async archiveFinishedTrips(now = new Date()) {
+    const candidates = await Trip.find(
+      {
+        status: "inactive",
+        isArchived: { $ne: true },
+        endDate: { $type: "date", $lt: startOfToday(now) },
+      },
+      { endDate: 1 }
+    ).lean();
+
+    const dueIds = candidates.filter((trip) => shouldArchive(trip, now)).map((trip) => trip._id);
+    if (dueIds.length === 0) return 0;
+
+    const result = await Trip.updateMany(
+      { _id: { $in: dueIds } },
+      {
+        $set: { isArchived: true, archivedAt: now },
+        $push: { statusHistory: { action: "archived", from: "inactive", to: "inactive", at: now } },
+      }
+    );
+    return result.modifiedCount || 0;
+  }
+
+  async voidTrip(tripId, { reason } = {}, admin) {
+    const trip = await this.getTripById(tripId);
+    if (trip.status === "voided") {
+      throw new Error("This trip is already voided");
+    }
+    const cleanReason = String(reason || "").trim();
+    if (!cleanReason) {
+      throw new Error("Give a reason for voiding this trip");
     }
 
-    trip.isActive = !trip.isActive;
-    // Switching an archived trip back on takes it out of the archive too —
-    // otherwise it would read as active while still filed away.
-    if (trip.isActive && trip.isArchived) {
-      trip.isArchived = false;
-      trip.archivedAt = null;
-    }
+    const now = new Date();
+    this.#recordChange(trip, "voided", trip.status, "voided", cleanReason, admin, now);
+    trip.status = "voided";
+    trip.voidedAt = now;
+    trip.voidReason = cleanReason;
+    trip.isArchived = true;
+    trip.archivedAt = now;
     await trip.save();
     return trip;
+  }
+
+  // Manual archive, for completed trips the admin does not want to wait on.
+  async archiveTrip(tripId, admin) {
+    const trip = await this.getTripById(tripId);
+    if (trip.isArchived) {
+      throw new Error("This trip is already archived");
+    }
+    if (trip.status !== "inactive") {
+      throw new Error("Only an inactive trip can be archived. Void an active trip instead.");
+    }
+
+    const now = new Date();
+    this.#recordChange(trip, "archived", "inactive", "inactive", "", admin, now);
+    trip.isArchived = true;
+    trip.archivedAt = now;
+    await trip.save();
+    return trip;
+  }
+
+  // Brings an inactive or voided trip back to active, out of the archive, with
+  // new dates. Everything else on the trip (pricing, customers, bookings) is
+  // left exactly as it was.
+  async reactivateTrip(tripId, { departures, startDate, endDate, reason } = {}, admin) {
+    const trip = await this.getTripById(tripId);
+    if (trip.status === "active") {
+      throw new Error("This trip is already active");
+    }
+
+    const hadDates = Boolean(trip.departures?.length || trip.endDate);
+    const schedule = buildSchedule({ departures, startDate, endDate });
+
+    if (hadDates && schedule.departures.length === 0) {
+      throw new Error("Enter the new dates for this trip");
+    }
+    if (trip.isCustom && schedule.departures.length > 1) {
+      throw new Error("A custom trip runs once, so it takes a single set of dates");
+    }
+    const today = startOfToday();
+    const past = schedule.departures.find((departure) => departure.startDate < today);
+    if (past) {
+      throw new Error(`"${past.name}" starts before today. An active trip needs dates from today onward.`);
+    }
+
+    const from = trip.status;
+    this.#recordChange(trip, "reactivated", from, "active", String(reason || "").trim(), admin, new Date());
+    trip.departures = schedule.departures;
+    trip.startDate = schedule.startDate;
+    trip.endDate = schedule.endDate;
+    trip.status = "active";
+    trip.isArchived = false;
+    trip.archivedAt = null;
+    trip.voidedAt = null;
+    trip.voidReason = "";
+    await trip.save();
+    return trip;
+  }
+
+  #recordChange(trip, action, from, to, reason, admin, at) {
+    trip.statusHistory.push({
+      action,
+      from,
+      to,
+      reason,
+      by: admin?._id || null,
+      byEmail: admin?.email || "",
+      at,
+    });
   }
 }
 

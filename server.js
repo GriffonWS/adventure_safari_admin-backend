@@ -63,15 +63,19 @@ const TRIP_SWEEP_INTERVAL_MS = 6 * 60 * 60 * 1000;
 
 const sweepFinishedTrips = async () => {
   try {
-    const retired = await tripService.deactivateFinishedTrips();
-    if (retired > 0) {
-      console.log(`Deactivated ${retired} trip(s) that have finished`);
+    const backfilled = await tripService.backfillTripStatus();
+    if (backfilled > 0) {
+      console.log(`Set status on ${backfilled} older trip(s)`);
     }
 
-    // A month after it ended, a finished trip moves out of the working list.
+    const retired = await tripService.deactivateFinishedTrips();
+    if (retired > 0) {
+      console.log(`Marked ${retired} finished trip(s) inactive`);
+    }
+
     const archived = await tripService.archiveFinishedTrips();
     if (archived > 0) {
-      console.log(`Archived ${archived} trip(s) that finished over a month ago`);
+      console.log(`Archived ${archived} trip(s) at month end`);
     }
   } catch (error) {
     // A failed sweep must never take the server down with it — the next run

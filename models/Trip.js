@@ -25,6 +25,27 @@ const departureSchema = new mongoose.Schema(
   { _id: true }
 );
 
+export const TRIP_STATUSES = ["active", "inactive", "voided"];
+
+// One entry per status change or archive, so a trip's history can be audited.
+// `by` is null when the scheduled sweep made the change.
+const statusChangeSchema = new mongoose.Schema(
+  {
+    action: {
+      type: String,
+      enum: ["completed", "voided", "reactivated", "archived"],
+      required: true,
+    },
+    from: { type: String, default: null },
+    to: { type: String, default: null },
+    reason: { type: String, trim: true, default: "" },
+    by: { type: mongoose.Schema.Types.ObjectId, ref: "Admin", default: null },
+    byEmail: { type: String, default: "" },
+    at: { type: Date, default: Date.now },
+  },
+  { _id: false }
+);
+
 const tripSchema = new mongoose.Schema(
   {
     name: {
@@ -114,12 +135,19 @@ const tripSchema = new mongoose.Schema(
       type: Date,
       default: null,
     },
+    // active: expected to run. inactive: completed. voided: never taken.
+    status: {
+      type: String,
+      enum: TRIP_STATUSES,
+      default: "active",
+    },
+    // Mirrors status === "active" for the client app, which still reads it.
     isActive: {
       type: Boolean,
       default: true,
     },
-    // A trip is archived a month after it ends: out of the working list, but
-    // never deleted, because bookings still point at it.
+    // Archived trips leave the working list but are never deleted, because
+    // bookings still point at them.
     isArchived: {
       type: Boolean,
       default: false,
@@ -127,11 +155,29 @@ const tripSchema = new mongoose.Schema(
     archivedAt: {
       type: Date,
       default: null,
-    }
+    },
+    voidedAt: {
+      type: Date,
+      default: null,
+    },
+    voidReason: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+    statusHistory: {
+      type: [statusChangeSchema],
+      default: [],
+    },
   },
   {
     timestamps: true,
   }
 );
+
+tripSchema.pre("save", function (next) {
+  this.isActive = this.status === "active";
+  next();
+});
 
 export default mongoose.model("Trip", tripSchema);

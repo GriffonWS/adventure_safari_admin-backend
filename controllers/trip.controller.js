@@ -84,17 +84,28 @@ export const uploadTripImage = async (req, res) => {
   }
 };
 
-// Toggle trip status
-export const toggleTripStatus = async (req, res) => {
+const statusAction = (run, successMessage) => async (req, res) => {
   try {
-    const { id } = req.params;
-    const trip = await tripService.toggleTripStatus(id);
-    res.status(200).json({
-      message: "Trip status updated successfully",
-      trip
-    });
+    const trip = await run(req);
+    res.status(200).json({ message: successMessage, trip });
   } catch (error) {
-    console.error("Error toggling trip status:", error);
-    res.status(404).json({ message: error.message || "Error updating trip status" });
+    console.error(`Error: ${successMessage}:`, error);
+    const code = error.message === "Trip not found" ? 404 : 400;
+    res.status(code).json({ message: error.message || "Error updating trip status" });
   }
 };
+
+export const voidTrip = statusAction(
+  (req) => tripService.voidTrip(req.params.id, req.body, req.user),
+  "Trip voided and moved to the archive"
+);
+
+export const archiveTrip = statusAction(
+  (req) => tripService.archiveTrip(req.params.id, req.user),
+  "Trip archived"
+);
+
+export const reactivateTrip = statusAction(
+  (req) => tripService.reactivateTrip(req.params.id, req.body, req.user),
+  "Trip reactivated"
+);
