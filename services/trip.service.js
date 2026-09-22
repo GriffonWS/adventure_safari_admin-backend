@@ -1,4 +1,5 @@
 import Trip from "../models/Trip.js";
+import Booking from "../models/Booking.js";
 import { normalizePricingTiers, derivePriceFromTiers } from "../utils/pricing.js";
 import { normalizeAssignedUserIds, resolveAssignedUserIds } from "../utils/assignment.js";
 import { startOfToday, shouldArchive } from "../utils/schedule.js";
@@ -393,7 +394,35 @@ class TripService {
     trip.voidedAt = null;
     trip.voidReason = "";
     await trip.save();
+    await this.#rescheduleBookings(trip);
     return trip;
+  }
+
+  // Bookings keep their own copy of the dates they were sold, so a rescheduled
+  // trip has to carry its new dates onto them. A trip with one departure moves
+  // every booking; otherwise each booking follows its departure by id.
+  async #rescheduleBookings(trip) {
+    const snapshot = (departure) => ({
+      departureId: departure._id,
+      name: departure.name,
+      startDate: departure.startDate,
+      endDate: departure.endDate,
+    });
+
+    if (trip.departures.length === 1) {
+      await Booking.updateMany(
+        { tripId: trip._id },
+        { $set: { departure: snapshot(trip.departures[0]) } }
+      );
+      return;
+    }
+
+    for (const departure of trip.departures) {
+      await Booking.updateMany(
+        { tripId: trip._id, "departure.departureId": departure._id },
+        { $set: { departure: snapshot(departure) } }
+      );
+    }
   }
 
   #recordChange(trip, action, from, to, reason, admin, at) {
