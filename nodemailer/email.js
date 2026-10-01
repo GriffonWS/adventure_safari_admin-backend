@@ -8,7 +8,7 @@ export const sendAnnouncementEmail = async (userEmail, userName, subject, messag
     const transporter = createTransporter();
 
     const mailOptions = {
-      from: `"Adventure Safari" <${process.env.EMAIL_USER}>`,
+      from: `"Adventure Safari Network" <${process.env.EMAIL_USER}>`,
       to: userEmail,
       subject: `📢 ${subject}`,
       html: announcementTemplate(userName, subject, message),
@@ -73,7 +73,7 @@ export const sendPassportRejectedEmail = async (customerEmail, customerName, gue
     const transporter = createTransporter();
 
     const mailOptions = {
-      from: `"Adventure Safari" <${process.env.EMAIL_USER}>`,
+      from: `"Adventure Safari Network" <${process.env.EMAIL_USER}>`,
       to: customerEmail,
       subject: `Action needed: passport for ${guestName} must be re-uploaded`,
       html: passportRejectedTemplate(customerName, guestName, reason, portalUrl),
@@ -95,7 +95,7 @@ export const sendTripInvitationEmail = async (email, tripName, invitationToken, 
     const registrationUrl = `${clientUrl}/register?invitation=${invitationToken}`;
 
     const mailOptions = {
-      from: `"Adventure Safari" <${process.env.EMAIL_USER}>`,
+      from: `"Adventure Safari Network" <${process.env.EMAIL_USER}>`,
       to: email,
       subject: `You're invited to an exclusive safari trip: ${tripName}`,
       html: tripInvitationTemplate(tripName, registrationUrl, wetuLink),

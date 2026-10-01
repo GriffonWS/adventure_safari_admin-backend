@@ -1,3 +1,12 @@
+import clientUrl from '../config/clientUrl.js';
+
+const logoImg = `<img src="${clientUrl}/email-logo.jpg" alt="Adventure Safari Network" width="240" style="display:inline-block;max-width:100%;height:auto;border:0;">`;
+
+const logoBanner = `
+  <div style="background-color:#ffffff;padding:20px;text-align:center;">
+    ${logoImg}
+  </div>`;
+
 // Email template for announcements
 export const announcementTemplate = (userName, subject, message) => {
   return `
@@ -91,7 +100,7 @@ export const announcementTemplate = (userName, subject, message) => {
     <body>
       <div class="container">
         <div class="header">
-          <div class="logo">🦁 Adventure Safari</div>
+          <div class="logo">${logoImg}</div>
           <div class="announcement-badge">📢 ANNOUNCEMENT</div>
         </div>
 
@@ -107,14 +116,14 @@ export const announcementTemplate = (userName, subject, message) => {
 
         <div class="contact-info">
           <p><strong>Need Help?</strong></p>
-          <p>Contact us at: <a href="mailto:${process.env.EMAIL_USER || 'support@adventuresafari.com'}" style="color: #fbaf3f; text-decoration: none;">${process.env.EMAIL_USER || 'support@adventuresafari.com'}</a></p>
+          <p>Contact us at: <a href="mailto:${process.env.EMAIL_USER || 'gary@adventuresafarinetwork.com'}" style="color: #fbaf3f; text-decoration: none;">${process.env.EMAIL_USER || 'gary@adventuresafarinetwork.com'}</a></p>
         </div>
 
         <div class="footer">
-          <p><strong>Adventure Safari</strong></p>
+          <p><strong>Adventure Safari Network</strong></p>
           <p>Your Gateway to Wild Adventures</p>
           <p style="margin-top: 15px; color: #bbb;">
-            This is an automated announcement from Adventure Safari. Please do not reply to this email.
+            This is an automated announcement from Adventure Safari Network. Please do not reply to this email.
           </p>
         </div>
       </div>
@@ -144,6 +153,7 @@ export const passportRejectedTemplate = (customerName, guestName, reason, portal
     </head>
     <body style="margin:0;padding:0;background-color:#f2f2f2;font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;color:#473d34;">
       <div style="max-width:600px;margin:0 auto;background-color:#ffffff;">
+        ${logoBanner}
 
         <div style="background-color:#256000;padding:24px 30px;">
           <h1 style="margin:0;color:#ffffff;font-size:20px;font-weight:600;">
@@ -316,8 +326,8 @@ export const tripInvitationTemplate = (tripName, registrationUrl, wetuLink) => {
     </head>
     <body>
       <div class="container">
+        ${logoBanner}
         <div class="header">
-          <div class="logo">🦁</div>
           <h1>You're invited to an exclusive trip!</h1>
         </div>
 
@@ -365,7 +375,7 @@ export const tripInvitationTemplate = (tripName, registrationUrl, wetuLink) => {
         </div>
 
         <div class="footer">
-          <p><strong>Adventure Safari</strong></p>
+          <p><strong>Adventure Safari Network</strong></p>
           <p>Your Gateway to Wild Adventures</p>
           <p style="margin-top: 10px;">This is an invitation email. If sent in error, you can ignore it.</p>
         </div>
