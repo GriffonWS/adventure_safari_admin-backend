@@ -17,9 +17,12 @@ export const getInvitationsForTrip = async (req, res) => {
 export const resendInvitation = async (req, res) => {
   try {
     const { invitationId } = req.params;
-    const invitation = await invitationService.resendInvitation(invitationId);
+    const { invitation, sentAt, previousLastSentAt } = await invitationService.claimResend(
+      invitationId,
+      req.user._id,
+      { force: req.body?.force === true }
+    );
 
-    // Send email
     const emailResult = await sendTripInvitationEmail(
       invitation.email,
       invitation.tripName,
@@ -27,12 +30,20 @@ export const resendInvitation = async (req, res) => {
       "" // wetuLink not stored in invitation
     );
 
+    if (!emailResult.success) {
+      await invitationService.markResendFailed(invitationId, sentAt, previousLastSentAt);
+      return res.status(502).json({ message: "The invitation email could not be sent. Please try again." });
+    }
+
     res.json({
       message: "Invitation resent successfully",
       invitation,
-      emailSent: emailResult.success
+      emailSent: true,
     });
   } catch (error) {
+    if (error.code === "RECENTLY_SENT") {
+      return res.status(409).json({ message: error.message, code: error.code, ...error.details });
+    }
     console.error("Error resending invitation:", error);
     res.status(400).json({ message: error.message || "Error resending invitation" });
   }

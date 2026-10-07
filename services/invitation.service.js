@@ -1,6 +1,21 @@
 import Invitation from "../models/Invitation.js";
 import User from "../models/User.js";
 
+export const RESEND_COOLDOWN_MS = 24 * 60 * 60 * 1000;
+
+const recentlySentError = (invitation) => {
+  const lastResend = [...(invitation.resends || [])].reverse().find((r) => r.emailSent !== false);
+  const error = new Error("This invitation was sent recently");
+  error.code = "RECENTLY_SENT";
+  error.details = {
+    email: invitation.email,
+    lastSentAt: invitation.lastSentAt || invitation.createdAt,
+    lastSentBy: lastResend?.sentBy?.email || null,
+    resendCount: (invitation.resends || []).filter((r) => r.emailSent !== false).length,
+  };
+  return error;
+};
+
 class InvitationService {
   // Create invitation for a single email
   async createInvitation(email, tripId, tripName, invitedBy) {
@@ -19,8 +34,9 @@ class InvitationService {
     });
 
     if (existingInvitation && !existingInvitation.isExpired()) {
-      // Invitation still valid, return existing one
-      return existingInvitation;
+      // Already invited and still valid: don't email them again. Resending is
+      // a deliberate action from the trip page.
+      return { alreadyInvited: true, email: existingInvitation.email };
     }
 
     // Create new invitation
@@ -61,6 +77,8 @@ class InvitationService {
           email: invitation.email,
           userId: invitation.userId,
         });
+      } else if (invitation?.alreadyInvited) {
+        results.existingInvitations.push({ email: invitation.email });
       } else if (invitation?._id) {
         // New invitation created
         results.invitedEmails.push({
@@ -117,12 +135,15 @@ class InvitationService {
   // Get all invitations for a trip (admin view)
   async getInvitationsForTrip(tripId) {
     return await Invitation.find({ tripId })
+      .populate("invitedBy", "email")
+      .populate("resends.sentBy", "email")
       .sort({ createdAt: -1 });
   }
 
-  // Resend invitation email (admin action)
-  async resendInvitation(invitationId) {
-    const invitation = await Invitation.findById(invitationId);
+  // Claims the resend before the email goes out, so two admins clicking at
+  // once can't both send. Within the cooldown the caller must pass force.
+  async claimResend(invitationId, adminId, { force = false } = {}) {
+    const invitation = await Invitation.findById(invitationId).populate("resends.sentBy", "email");
 
     if (!invitation) {
       throw new Error("Invitation not found");
@@ -132,14 +153,47 @@ class InvitationService {
       throw new Error("Only pending invitations can be resent");
     }
 
-    if (invitation.isExpired()) {
-      // Generate new token and extend expiry
-      invitation.invitationToken = Invitation.generateToken();
-      invitation.expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
-      await invitation.save();
+    const lastSentAt = invitation.lastSentAt || invitation.createdAt;
+    if (!force && Date.now() - lastSentAt.getTime() < RESEND_COOLDOWN_MS) {
+      throw recentlySentError(invitation);
     }
 
-    return invitation;
+    const sentAt = new Date();
+    const update = {
+      $set: { lastSentAt: sentAt },
+      $push: { resends: { sentAt, sentBy: adminId } },
+    };
+    if (invitation.isExpired()) {
+      update.$set.invitationToken = Invitation.generateToken();
+      update.$set.expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+    }
+
+    // Matches only if nobody else resent since we read it.
+    const claimed = await Invitation.findOneAndUpdate(
+      { _id: invitationId, status: "pending", lastSentAt: invitation.lastSentAt || null },
+      update,
+      { new: true }
+    );
+
+    if (!claimed) {
+      const latest = await Invitation.findById(invitationId).populate("resends.sentBy", "email");
+      throw recentlySentError(latest || invitation);
+    }
+
+    return { invitation: claimed, sentAt, previousLastSentAt: invitation.lastSentAt || null };
+  }
+
+  // The email didn't go out: keep the attempt in the history but don't let it
+  // count as a send.
+  async markResendFailed(invitationId, sentAt, previousLastSentAt) {
+    await Invitation.updateOne(
+      { _id: invitationId, "resends.sentAt": sentAt },
+      { $set: { "resends.$.emailSent": false } }
+    );
+    await Invitation.updateOne(
+      { _id: invitationId, lastSentAt: sentAt },
+      { $set: { lastSentAt: previousLastSentAt } }
+    );
   }
 
   // Delete invitation (admin action - in case of mistake)

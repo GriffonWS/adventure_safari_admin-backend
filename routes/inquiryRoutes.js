@@ -4,6 +4,7 @@ import {
   getInquiryById,
   updateInquiryStatus,
   deleteInquiry,
+  replyToInquiry,
 } from "../controllers/inquiryController.js";
 import adminAuth from "../middleware/auth.js";
 
@@ -17,6 +18,9 @@ router.get("/:id", adminAuth, getInquiryById);
 
 // Update inquiry status
 router.patch("/:id/status", adminAuth, updateInquiryStatus);
+
+// Email a reply to the customer
+router.post("/:id/reply", adminAuth, replyToInquiry);
 
 // Delete inquiry
 router.delete("/:id", adminAuth, deleteInquiry);

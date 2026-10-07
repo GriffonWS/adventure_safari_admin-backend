@@ -63,7 +63,7 @@ export const getAllBookings = async (req, res) => {
 
     const bookings = await Booking.find(filter)
       .populate("userId", "name email")
-      .populate("tripId", "name destination price pricing")
+      .populate("tripId", "name destination price pricing startDate endDate")
       .populate("guestIds", "name")
       .sort({ createdAt: -1 }); // Latest bookings first
 
@@ -85,7 +85,7 @@ export const getBookingById = async (req, res) => {
 
     const booking = await Booking.findById(id)
       .populate("userId", "name email phone")
-      .populate("tripId", "name destination price pricing")
+      .populate("tripId", "name destination price pricing startDate endDate")
       .populate("guestIds");
 
     if (!booking) {
@@ -125,7 +125,7 @@ export const updateAirArrangement = async (req, res) => {
 
     const updatedBooking = await Booking.findById(id)
       .populate("userId", "name email phone")
-      .populate("tripId", "name destination price pricing")
+      .populate("tripId", "name destination price pricing startDate endDate")
       .populate("guestIds");
 
     res.json({
@@ -172,7 +172,7 @@ export const uploadAirTicket = async (req, res) => {
 
     const updatedBooking = await Booking.findById(id)
       .populate("userId", "name email phone")
-      .populate("tripId", "name destination price pricing")
+      .populate("tripId", "name destination price pricing startDate endDate")
       .populate("guestIds");
 
     res.json({
@@ -286,7 +286,7 @@ export const createBooking = async (req, res) => {
 
     // Populate the booking before sending response
     await booking.populate("userId", "name email");
-    await booking.populate("tripId", "name destination price pricing");
+    await booking.populate("tripId", "name destination price pricing startDate endDate");
     await booking.populate("guestIds");
 
     res.status(201).json({
@@ -321,9 +321,28 @@ export const getPendingApprovals = async (req, res) => {
     })
       .populate("userId", "name email")
       .populate("passportApproval.approvedBy", "name email")
-      .sort({ createdAt: -1 });
+      .sort({ createdAt: -1 })
+      .lean();
 
-    res.json(guests);
+    // A customer gets a separate guest record per booking, so the same name
+    // can appear more than once. Attach the booking so the rows can be told apart.
+    const bookings = await Booking.find({ guestIds: { $in: guests.map((g) => g._id) } })
+      .select("bookingId bookingStatus guestIds tripId")
+      .populate("tripId", "name")
+      .lean();
+    const bookingByGuest = new Map();
+    for (const booking of bookings) {
+      for (const guestId of booking.guestIds) {
+        bookingByGuest.set(String(guestId), {
+          _id: booking._id,
+          bookingId: booking.bookingId,
+          bookingStatus: booking.bookingStatus,
+          tripName: booking.tripId?.name || null,
+        });
+      }
+    }
+
+    res.json(guests.map((guest) => ({ ...guest, booking: bookingByGuest.get(String(guest._id)) || null })));
   } catch (err) {
     console.error("Error fetching pending approvals:", err);
     res.status(500).json({ message: "Error fetching pending approvals" });
@@ -456,7 +475,7 @@ export const setInstallmentPlan = async (req, res) => {
       await booking.save();
       const cleared = await Booking.findById(id)
         .populate("userId", "name email phone")
-        .populate("tripId", "name destination price pricing")
+        .populate("tripId", "name destination price pricing startDate endDate")
         .populate("guestIds");
       return res.json({ message: "Installment plan removed", booking: cleared });
     }
@@ -522,7 +541,7 @@ export const setInstallmentPlan = async (req, res) => {
 
     const updatedBooking = await Booking.findById(id)
       .populate("userId", "name email phone")
-      .populate("tripId", "name destination price pricing")
+      .populate("tripId", "name destination price pricing startDate endDate")
       .populate("guestIds");
 
     res.json({ message: "Installment plan saved", booking: updatedBooking });
@@ -547,7 +566,7 @@ export const updateTravelKey = async (req, res) => {
       { new: true }
     )
       .populate("userId", "name email phone")
-      .populate("tripId", "name destination price pricing")
+      .populate("tripId", "name destination price pricing startDate endDate")
       .populate("guestIds");
 
     if (!booking) {

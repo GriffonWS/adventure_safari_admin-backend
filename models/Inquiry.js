@@ -27,6 +27,13 @@ const inquirySchema = new mongoose.Schema(
       enum: ["new", "read", "replied", "closed"],
       default: "new",
     },
+    replies: [
+      {
+        message: { type: String, required: true },
+        sentAt: { type: Date, default: Date.now },
+        sentBy: { type: mongoose.Schema.Types.ObjectId, ref: "Admin" },
+      },
+    ],
   },
   {
     timestamps: true,

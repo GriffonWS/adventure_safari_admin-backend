@@ -1,32 +1,32 @@
+import "dotenv/config";
 import mongoose from "mongoose";
 import bcrypt from "bcryptjs";
 import Admin from "../models/Admin.js";
 
-const MONGO_URI =
-  "mongodb+srv://mdanish:vPEXpmvLiQiwgfn1@griffon.dhrrsbo.mongodb.net/adventureSafari?retryWrites=true&w=majority&appName=griffon";
+// Usage: ADMIN_EMAIL=... ADMIN_PASSWORD=... node utils/seedAdmin.js
+const { MONGO_URI, ADMIN_EMAIL, ADMIN_PASSWORD } = process.env;
 
 const seedAdmin = async () => {
+  if (!MONGO_URI || !ADMIN_EMAIL || !ADMIN_PASSWORD) {
+    console.error("❌ MONGO_URI, ADMIN_EMAIL and ADMIN_PASSWORD must be set");
+    process.exit(1);
+  }
+
   try {
     await mongoose.connect(MONGO_URI);
 
-    const email = "adventuresafari@gmail.com"; // your admin email
-    const password = "Adventure@123"; // your admin password
+    const hashedPassword = await bcrypt.hash(ADMIN_PASSWORD, 10);
 
-    // Hash password
-    const salt = await bcrypt.genSalt(10);
-    const hashedPassword = await bcrypt.hash(password, salt);
-
-    // Insert or update admin
     const admin = await Admin.findOneAndUpdate(
-      { email },
-      { email, password: hashedPassword },
-      { upsert: true, new: true } // update if exists, insert if not
+      { email: ADMIN_EMAIL },
+      { email: ADMIN_EMAIL, password: hashedPassword },
+      { upsert: true, new: true }
     );
 
-    console.log("✅ Admin user ensured:", admin);
-    mongoose.connection.close();
+    console.log("✅ Admin password set for:", admin.email);
   } catch (error) {
     console.error("❌ Error seeding admin:", error);
+  } finally {
     mongoose.connection.close();
   }
 };

@@ -1,9 +1,10 @@
 import Inquiry from "../models/Inquiry.js";
+import { sendInquiryReplyEmail } from "../nodemailer/email.js";
 
 // Get all inquiries
 export const getAllInquiries = async (req, res) => {
   try {
-    let inquiries = await Inquiry.find().sort({ createdAt: -1 });
+    let inquiries = await Inquiry.find().populate("replies.sentBy", "email").sort({ createdAt: -1 });
 
     // Ensure all inquiries have a status field (for backward compatibility)
     inquiries = inquiries.map(inquiry => {
@@ -119,5 +120,38 @@ export const deleteInquiry = async (req, res) => {
       success: false,
       message: "Failed to delete inquiry.",
     });
+  }
+};
+
+// Email a reply to the customer and keep it on the inquiry
+export const replyToInquiry = async (req, res) => {
+  try {
+    const message = String(req.body?.message || "").trim();
+    if (!message) {
+      return res.status(400).json({ success: false, message: "Reply message is required" });
+    }
+
+    const inquiry = await Inquiry.findById(req.params.id);
+    if (!inquiry) {
+      return res.status(404).json({ success: false, message: "Inquiry not found" });
+    }
+
+    const emailResult = await sendInquiryReplyEmail(inquiry.email, inquiry.name, message, inquiry.query);
+    if (!emailResult.success) {
+      return res.status(502).json({
+        success: false,
+        message: "The reply email could not be sent. Please try again.",
+      });
+    }
+
+    inquiry.replies.push({ message, sentAt: new Date(), sentBy: req.user._id });
+    if (inquiry.status !== "closed") inquiry.status = "replied";
+    await inquiry.save();
+    await inquiry.populate("replies.sentBy", "email");
+
+    return res.status(200).json({ success: true, message: "Reply sent", data: inquiry });
+  } catch (error) {
+    console.error("Error replying to inquiry:", error.message);
+    return res.status(500).json({ success: false, message: "Failed to send reply." });
   }
 };

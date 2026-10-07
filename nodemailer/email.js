@@ -1,6 +1,6 @@
 import createTransporter from './config.js';
 import clientUrl from '../config/clientUrl.js';
-import { announcementTemplate, passportRejectedTemplate, tripInvitationTemplate } from './email-templates.js';
+import { announcementTemplate, passportRejectedTemplate, tripInvitationTemplate, inquiryReplyTemplate } from './email-templates.js';
 
 // Send announcement email to a single user
 export const sendAnnouncementEmail = async (userEmail, userName, subject, message) => {
@@ -131,4 +131,24 @@ export const sendBulkTripInvitations = async (invitations, tripName, wetuLink) =
   }
 
   return results;
+};
+
+export const sendInquiryReplyEmail = async (customerEmail, customerName, reply, originalQuery) => {
+  try {
+    const transporter = createTransporter();
+
+    const info = await transporter.sendMail({
+      from: `"Adventure Safari Network" <${process.env.EMAIL_USER}>`,
+      to: customerEmail,
+      replyTo: process.env.EMAIL_USER,
+      subject: "Re: Your inquiry to Adventure Safari Network",
+      text: `Hello ${customerName},\n\n${reply}\n\n---\nYour question:\n${originalQuery}`,
+      html: inquiryReplyTemplate(customerName, reply, originalQuery),
+    });
+    console.log(`Inquiry reply sent to ${customerEmail}: ${info.messageId}`);
+    return { success: true, messageId: info.messageId };
+  } catch (error) {
+    console.error(`Error sending inquiry reply to ${customerEmail}:`, error);
+    return { success: false, error: error.message };
+  }
 };

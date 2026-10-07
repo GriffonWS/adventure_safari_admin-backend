@@ -384,3 +384,43 @@ export const tripInvitationTemplate = (tripName, registrationUrl, wetuLink) => {
     </html>
   `;
 };
+
+// An admin's answer to a question sent through the website's contact form.
+// The customer's original question is quoted underneath so the reply makes
+// sense on its own.
+export const inquiryReplyTemplate = (customerName, reply, originalQuery) => {
+  const safe = (value) =>
+    String(value ?? "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+
+  return `
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>Re: Your inquiry</title>
+    </head>
+    <body style="margin:0;padding:20px;background-color:#f4f4f4;font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;color:#333;line-height:1.6;">
+      <div style="max-width:600px;margin:0 auto;background-color:#ffffff;border-radius:10px;overflow:hidden;">
+        ${logoBanner}
+        <div style="padding:10px 36px 36px;">
+          <p style="font-size:16px;">Hello ${safe(customerName)},</p>
+          <div style="white-space:pre-wrap;font-size:15px;line-height:1.7;">${safe(reply)}</div>
+          <div style="margin-top:32px;padding:16px 20px;background-color:#f9f5f2;border-left:4px solid #fbaf3f;border-radius:5px;">
+            <p style="margin:0 0 6px;font-size:12px;color:#888;text-transform:uppercase;letter-spacing:0.5px;">Your question</p>
+            <div style="white-space:pre-wrap;font-size:14px;color:#555;">${safe(originalQuery)}</div>
+          </div>
+          <p style="margin-top:28px;font-size:14px;color:#666;">You can reply to this email if you have more questions.</p>
+        </div>
+        <div style="padding:20px;border-top:1px solid #e6e1db;text-align:center;color:#999;font-size:12px;">
+          <strong>Adventure Safari Network</strong><br>Your Gateway to Wild Adventures
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
+};

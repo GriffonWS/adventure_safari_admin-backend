@@ -46,6 +46,19 @@ const invitationSchema = new mongoose.Schema(
       type: Date,
       default: null,
     },
+    // Last time the email went out. Missing on invitations that were never
+    // resent, where createdAt is the send time.
+    lastSentAt: {
+      type: Date,
+      default: null,
+    },
+    resends: [
+      {
+        sentAt: { type: Date, required: true },
+        sentBy: { type: mongoose.Schema.Types.ObjectId, ref: "Admin" },
+        emailSent: { type: Boolean, default: true },
+      },
+    ],
   },
   {
     timestamps: true,
