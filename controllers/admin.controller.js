@@ -22,10 +22,61 @@ export const getAllUsers = async (req, res) => {
       {
         $addFields: {
           bookingCount: { $size: "$bookings" },
+          activeBookings: {
+            $filter: {
+              input: "$bookings",
+              cond: { $ne: ["$$this.bookingStatus", "cancelled"] },
+            },
+          },
+        },
+      },
+      // Passports and registration fees are tracked per traveler, so both are
+      // counted across the user's travelers on bookings that aren't cancelled.
+      {
+        $addFields: {
+          allGuestIds: {
+            $reduce: {
+              input: "$activeBookings",
+              initialValue: [],
+              in: { $concatArrays: ["$$value", { $ifNull: ["$$this.guestIds", []] }] },
+            },
+          },
+          registrationPaidCount: {
+            $sum: {
+              $map: {
+                input: "$activeBookings",
+                in: { $size: { $ifNull: ["$$this.registrationPaymentDetails.paidGuestIds", []] } },
+              },
+            },
+          },
+        },
+      },
+      {
+        $lookup: {
+          from: "guests",
+          localField: "allGuestIds",
+          foreignField: "_id",
+          as: "guests",
+        },
+      },
+      {
+        $addFields: {
+          travelerCount: { $size: "$guests" },
+          passportCount: {
+            $size: {
+              $filter: {
+                input: "$guests",
+                cond: { $gt: [{ $strLenCP: { $ifNull: ["$$this.passport", ""] } }, 0] },
+              },
+            },
+          },
         },
       },
       {
         $project: {
+          activeBookings: 0,
+          allGuestIds: 0,
+          guests: 0,
           password: 0,
           verificationToken: 0,
           resetPasswordToken: 0,

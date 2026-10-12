@@ -177,8 +177,11 @@ export const passportRejectedTemplate = (customerName, guestName, reason, portal
           </div>
 
           <p style="margin:0 0 24px;font-size:15px;line-height:1.6;">
-            Please upload a new copy of the passport in your booking portal. This
-            replacement won't count against your usual one-time update limit.
+            If the problem is with the passport scan, please upload a new copy in
+            your booking portal. This replacement won't count against your usual
+            one-time update limit. If a detail such as the passport number or a
+            date is wrong, correct it in the Guest Information form in the portal
+            and we'll review it again.
           </p>
 
           ${
@@ -186,7 +189,7 @@ export const passportRejectedTemplate = (customerName, guestName, reason, portal
               ? `<p style="margin:0 0 28px;">
                    <a href="${safe(portalUrl)}"
                       style="display:inline-block;background-color:#f7741d;color:#ffffff;text-decoration:none;padding:12px 26px;border-radius:6px;font-weight:600;font-size:15px;">
-                     Upload a new passport
+                     Open my booking portal
                    </a>
                  </p>`
               : ""

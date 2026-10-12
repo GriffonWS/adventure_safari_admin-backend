@@ -75,7 +75,7 @@ export const sendPassportRejectedEmail = async (customerEmail, customerName, gue
     const mailOptions = {
       from: `"Adventure Safari Network" <${process.env.EMAIL_USER}>`,
       to: customerEmail,
-      subject: `Action needed: passport for ${guestName} must be re-uploaded`,
+      subject: `Action needed: passport for ${guestName} needs attention`,
       html: passportRejectedTemplate(customerName, guestName, reason, portalUrl),
     };
 
