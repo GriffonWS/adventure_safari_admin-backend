@@ -94,6 +94,12 @@ const tripSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    // Higher-priced safaris include a monogrammed travel bag. On other trips
+    // the client can still ask for one, at extra cost added by hand.
+    bagIncluded: {
+      type: Boolean,
+      default: false,
+    },
     // The customers this trip was sent to. Two couples on the same safari each
     // book separately, so several customers can share one custom trip.
     assignedUserIds: [

@@ -191,6 +191,9 @@ const guestSchema = new mongoose.Schema(
         enum: ["carryOn", "africaSize"],
       },
       color: String,
+      // Only asked on trips without an included bag: the client opted in to
+      // buy one.
+      wanted: Boolean,
       monogram: String,
       requestedAt: Date,
     },

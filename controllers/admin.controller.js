@@ -63,7 +63,7 @@ export const getAllBookings = async (req, res) => {
 
     const bookings = await Booking.find(filter)
       .populate("userId", "name email")
-      .populate("tripId", "name destination price pricing startDate endDate")
+      .populate("tripId", "name destination price pricing startDate endDate bagIncluded")
       .populate("guestIds", "name")
       .sort({ createdAt: -1 }); // Latest bookings first
 
@@ -85,7 +85,7 @@ export const getBookingById = async (req, res) => {
 
     const booking = await Booking.findById(id)
       .populate("userId", "name email phone")
-      .populate("tripId", "name destination price pricing startDate endDate")
+      .populate("tripId", "name destination price pricing startDate endDate bagIncluded")
       .populate("guestIds");
 
     if (!booking) {
@@ -125,7 +125,7 @@ export const updateAirArrangement = async (req, res) => {
 
     const updatedBooking = await Booking.findById(id)
       .populate("userId", "name email phone")
-      .populate("tripId", "name destination price pricing startDate endDate")
+      .populate("tripId", "name destination price pricing startDate endDate bagIncluded")
       .populate("guestIds");
 
     res.json({
@@ -172,7 +172,7 @@ export const uploadAirTicket = async (req, res) => {
 
     const updatedBooking = await Booking.findById(id)
       .populate("userId", "name email phone")
-      .populate("tripId", "name destination price pricing startDate endDate")
+      .populate("tripId", "name destination price pricing startDate endDate bagIncluded")
       .populate("guestIds");
 
     res.json({
@@ -286,7 +286,7 @@ export const createBooking = async (req, res) => {
 
     // Populate the booking before sending response
     await booking.populate("userId", "name email");
-    await booking.populate("tripId", "name destination price pricing startDate endDate");
+    await booking.populate("tripId", "name destination price pricing startDate endDate bagIncluded");
     await booking.populate("guestIds");
 
     res.status(201).json({
@@ -475,7 +475,7 @@ export const setInstallmentPlan = async (req, res) => {
       await booking.save();
       const cleared = await Booking.findById(id)
         .populate("userId", "name email phone")
-        .populate("tripId", "name destination price pricing startDate endDate")
+        .populate("tripId", "name destination price pricing startDate endDate bagIncluded")
         .populate("guestIds");
       return res.json({ message: "Installment plan removed", booking: cleared });
     }
@@ -541,7 +541,7 @@ export const setInstallmentPlan = async (req, res) => {
 
     const updatedBooking = await Booking.findById(id)
       .populate("userId", "name email phone")
-      .populate("tripId", "name destination price pricing startDate endDate")
+      .populate("tripId", "name destination price pricing startDate endDate bagIncluded")
       .populate("guestIds");
 
     res.json({ message: "Installment plan saved", booking: updatedBooking });
@@ -566,7 +566,7 @@ export const updateTravelKey = async (req, res) => {
       { new: true }
     )
       .populate("userId", "name email phone")
-      .populate("tripId", "name destination price pricing startDate endDate")
+      .populate("tripId", "name destination price pricing startDate endDate bagIncluded")
       .populate("guestIds");
 
     if (!booking) {

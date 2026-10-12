@@ -30,7 +30,7 @@ class TripService {
 
   // Create new trip
   async createTrip(tripData) {
-    const { name, destination, price, image, wetuLink, isCustom, assignedUserId, assignedUserIds, invitedEmails, pricing, departures, startDate, endDate, invitedBy } = tripData;
+    const { name, destination, price, image, wetuLink, isCustom, bagIncluded, assignedUserId, assignedUserIds, invitedEmails, pricing, departures, startDate, endDate, invitedBy } = tripData;
 
     const schedule = buildSchedule({ departures, startDate, endDate });
 
@@ -83,6 +83,7 @@ class TripService {
       startDate: schedule.startDate,
       endDate: schedule.endDate,
       isCustom: Boolean(isCustom),
+      bagIncluded: Boolean(bagIncluded),
       assignedUserIds: isCustom ? assignedIds : [],
       // Mirrors the first customer so anything still reading the old single
       // field keeps working.
@@ -147,6 +148,9 @@ class TripService {
       if (updateData[field] !== undefined) {
         trip[field] = updateData[field];
       }
+    }
+    if (updateData.bagIncluded !== undefined) {
+      trip.bagIncluded = Boolean(updateData.bagIncluded);
     }
 
     // Dates are cleared by sending an empty list, or an empty value for the
